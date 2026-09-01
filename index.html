@@ -1073,6 +1073,17 @@ class Component extends DCLogic {
     // alongside ours — a plain non-passive window listener is required.
     this._onWheel = (e) => this.handleWheel(e);
     window.addEventListener('wheel', this._onWheel, { passive: false });
+    // iOS Safari's own multi-touch gesture recognizer (the one that swipes
+    // to the Tab Overview) races the page for a two-finger touch. It only
+    // yields if the page claims the gesture SYNCHRONOUSLY on touchstart —
+    // preventDefault() from touchmove or any later event is confirmed too
+    // late to reliably stop it. React attaches its onTouchStart passively
+    // by default (can't preventDefault at all), so — same reasoning as
+    // _onWheel above — this has to be a plain non-passive window listener.
+    this._onTouchStart = (e) => {
+      if (e.touches.length === 2) e.preventDefault();
+    };
+    window.addEventListener('touchstart', this._onTouchStart, { passive: false });
     // The camera-centered magnify effect (see renderVals' tileScale)
     // depends on window.innerWidth/innerHeight for its radius, so a
     // resize needs to trigger a re-render — a resize alone doesn't touch
@@ -1206,6 +1217,7 @@ class Component extends DCLogic {
   };
   componentWillUnmount() {
     window.removeEventListener('wheel', this._onWheel);
+    window.removeEventListener('touchstart', this._onTouchStart);
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('contextmenu', this._onContextMenu);
     window.removeEventListener('dragstart', this._onDragStart);
@@ -2315,7 +2327,15 @@ class Component extends DCLogic {
     // back to auto. 'auto' here lets text show its normal I-beam and
     // links/buttons keep the pointer cursor they already set themselves.
     const overlayOpen = !!this.state.detail || this.state.searchOpen;
-    const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:none;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};`;
+    // touch-action:pan-x pan-y (not none) — lets iOS keep its native
+    // one-finger pan/momentum handling on the compositor thread instead of
+    // forcing every touchmove through JS, which is what was making panning
+    // feel sluggish. Any pan-* value already excludes pinch-zoom and
+    // double-tap-zoom on its own (those need the separate `pinch-zoom`
+    // keyword, not present here), so this doesn't reopen native pinch —
+    // the touchstart listener above (componentDidMount) is what actually
+    // stops iOS's Tab Overview gesture from stealing the two-finger touch.
+    const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:pan-x pan-y;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};`;
 
     // Deep-zoom easter egg: continuing to zoom out past NORMAL_MIN_ZOOM now
     // keeps going instead of hitting a hard floor (see zoomAt's clamp) —
