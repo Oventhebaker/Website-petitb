@@ -300,7 +300,7 @@
   </style>
 </helmet>
 
-<div style="{{appStyle}}" onPointerDown="{{onDown}}" onPointerMove="{{onMove}}" onPointerUp="{{onUp}}" onPointerLeave="{{onUp}}">
+<div data-canvas-root style="{{appStyle}}" onPointerDown="{{onDown}}" onPointerMove="{{onMove}}" onPointerUp="{{onUp}}" onPointerLeave="{{onUp}}" onPointerCancel="{{onCancel}}">
 
   <!-- ============= INFINITE WORLD =============
        Once the deep-zoom whiteout is fully opaque there is nothing left to
@@ -474,6 +474,25 @@
   <button onClick="{{openSearch}}" style="{{searchBtnStyle}}">
     <svg width="16" height="16" viewBox="0 0 16 16" style="display:block;"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="{{chromeInk}}" stroke-width="1.3"></circle><line x1="10.3" y1="10.3" x2="15" y2="15" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
   </button>
+
+  <!-- ============= ZOOM IN/OUT (fallback controls — secondary to pinch/wheel) ============= -->
+  <button onClick="{{zoomIn}}" style="{{zoomInBtnStyle}}">
+    <svg width="14" height="14" viewBox="0 0 14 14" style="display:block;"><line x1="7" y1="1" x2="7" y2="13" stroke="{{chromeInk}}" stroke-width="1.3"></line><line x1="1" y1="7" x2="13" y2="7" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
+  </button>
+  <button onClick="{{zoomOut}}" style="{{zoomOutBtnStyle}}">
+    <svg width="14" height="14" viewBox="0 0 14 14" style="display:block;"><line x1="1" y1="7" x2="13" y2="7" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
+  </button>
+
+  <!-- ============= DEBUG HUD (?debug=1) ============= -->
+  <sc-if value="{{debugOn}}" hint-placeholder-val="{{ false }}">
+    <div style="{{debugHudWrapStyle}}">
+      <div style="{{debugRowStyle}}">{{debugCamX}}</div>
+      <div style="{{debugRowStyle}}">{{debugCamY}}</div>
+      <div style="{{debugRowStyle}}">{{debugZoom}}</div>
+      <div style="{{debugRowStyle}}">{{debugGestureLabel}}</div>
+      <div style="{{debugRowStyle}}">{{debugPointerCount}}</div>
+    </div>
+  </sc-if>
 
   <sc-if value="{{searchOpen}}" hint-placeholder-val="{{ false }}">
     <div style="{{searchOverlayStyle}}" onClick="{{closeSearch}}">
@@ -1073,17 +1092,50 @@ class Component extends DCLogic {
     // alongside ours — a plain non-passive window listener is required.
     this._onWheel = (e) => this.handleWheel(e);
     window.addEventListener('wheel', this._onWheel, { passive: false });
+    // The canvas root div (see the `data-canvas-root` attribute on it,
+    // just below the <helmet> block) — this template DSL has no verified
+    // `ref` support (nothing else in this file uses one), so a plain
+    // static attribute + querySelector mirrors the one mechanism already
+    // proven to work here (see _observeAnimated's `[data-cull-anim]`
+    // lookup below).
+    this._canvasEl = document.querySelector('[data-canvas-root]');
     // iOS Safari's own multi-touch gesture recognizer (the one that swipes
     // to the Tab Overview) races the page for a two-finger touch. It only
     // yields if the page claims the gesture SYNCHRONOUSLY on touchstart —
     // preventDefault() from touchmove or any later event is confirmed too
     // late to reliably stop it. React attaches its onTouchStart passively
     // by default (can't preventDefault at all), so — same reasoning as
-    // _onWheel above — this has to be a plain non-passive window listener.
+    // _onWheel above — this has to be a plain non-passive listener. Scoped
+    // to the canvas element itself (not window) and skipped while an
+    // overlay is open (matching onDown's own guard) — this is a defense
+    // for the CANVAS's gesture, not a page-wide policy, and it's the one
+    // exception in this file to "everything routes through onDown/onMove/
+    // onCancel": calling preventDefault() from onPointerDown itself was
+    // considered and rejected — it's unverified whether that suppresses
+    // iOS's OS-level system gesture the same way a raw touchstart
+    // preventDefault does, and the raw-touchstart approach is the one
+    // CONFIRMED WORKING via real iPhone testing this session. Not worth
+    // the regression risk to unify further.
     this._onTouchStart = (e) => {
+      if (this.state.detail || this.state.searchOpen) return;
       if (e.touches.length === 2) e.preventDefault();
     };
-    window.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    this._canvasEl.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    // Belt-and-suspenders alongside the touchstart claim above: with
+    // touch-action:none already on the canvas (see appStyle) this is
+    // normally redundant, but keeps iOS's system gesture from reasserting
+    // itself mid-gesture on the rare event it wasn't fully deterred at
+    // touchstart.
+    this._onTouchMove = (e) => {
+      if (this.state.detail || this.state.searchOpen) return;
+      if (e.touches.length >= 2) e.preventDefault();
+    };
+    this._canvasEl.addEventListener('touchmove', this._onTouchMove, { passive: false });
+    // ?debug=1 shows a small on-canvas HUD (camera.x/y/zoom, active
+    // gesture, pointer count) for diagnosing gesture behavior on a real
+    // device — see the debugOn block in renderVals. Mirrors the existing
+    // ?inputprobe convention just below.
+    this._debug = new URLSearchParams(location.search).has('debug');
     // The camera-centered magnify effect (see renderVals' tileScale)
     // depends on window.innerWidth/innerHeight for its radius, so a
     // resize needs to trigger a re-render — a resize alone doesn't touch
@@ -1217,7 +1269,10 @@ class Component extends DCLogic {
   };
   componentWillUnmount() {
     window.removeEventListener('wheel', this._onWheel);
-    window.removeEventListener('touchstart', this._onTouchStart);
+    if (this._canvasEl) {
+      this._canvasEl.removeEventListener('touchstart', this._onTouchStart);
+      this._canvasEl.removeEventListener('touchmove', this._onTouchMove);
+    }
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('contextmenu', this._onContextMenu);
     window.removeEventListener('dragstart', this._onDragStart);
@@ -1428,6 +1483,53 @@ class Component extends DCLogic {
     }).catch((err) => console.warn('[copyEmail] clipboard write failed:', err));
   };
 
+  // Every currently-down pointer (touch, mouse, or pen), keyed by
+  // pointerId — {x,y} last-known screen position.
+  _pointers = new Map();
+
+  // Explicit gesture-ownership state machine: 'idle' | 'pan' | 'pinch'.
+  // Everything in onDown/onMove/_endPointer branches off THIS, not off
+  // this._pointers.size or this.state.dragging re-derived independently in
+  // three places — a single source of truth for "what gesture owns the
+  // canvas right now" is what onMove needs to route input correctly, and
+  // what the debug HUD (renderVals) reads directly for display.
+  _gesture = 'idle';
+
+  // Snapshot taken once, at the moment a pinch STARTS (fresh two-finger
+  // touchdown, or a 1→2 or 3→2 finger-count change mid-gesture — see
+  // onDown/_endPointer, both of which call _enterPinch fresh rather than
+  // ever continuing stale values, per the "reinit from current camera on
+  // finger-count change" requirement). dist/zoom drive the absolute (not
+  // incremental) zoom formula in onMove: zoom = origin.zoom * dist/origin.dist
+  // — recomputed fresh from this frozen snapshot every frame, so it can
+  // never compound floating-point drift over a long gesture the way
+  // multiplying by the PREVIOUS frame's ratio would. camX/camY/worldX/
+  // worldY are captured for completeness/diagnostics (debug HUD) even
+  // though the per-frame math below only actually consumes zoom/dist —
+  // the camera write itself still goes through zoomAt (see onMove), which
+  // is what keeps the deep-zoom compass-pull and pan-lock behavior
+  // correct for free instead of reimplementing them here.
+  _pinchOrigin = null;
+  // Last frame's two-finger midpoint — the ONE incremental piece of pinch
+  // state, needed only for the two-finger PAN component (the midpoint
+  // itself sliding across the screen between frames). Reset alongside
+  // _pinchOrigin every time a pinch (re)starts.
+  _pinchLastMid = null;
+
+  _enterPinch = (p1, p2) => {
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    const { camX, camY, zoom } = this.state;
+    const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+    this._pinchOrigin = {
+      dist, mid, zoom, camX, camY,
+      worldX: camX + (mid.x - cx) / zoom,
+      worldY: camY + (mid.y - cy) / zoom,
+    };
+    this._pinchLastMid = mid;
+    this._gesture = 'pinch';
+  };
+
   onDown = (e) => {
     // Same guard as handleWheel, and for the same reason: with an overlay
     // (search / project detail) open, the whole viewport is that overlay —
@@ -1445,6 +1547,29 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit(); // a real gesture takes over from any in-flight star-exit tween
     this._cancelGlideHome(); // …and from a compass return-to-center glide
+
+    this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (this._pointers.size === 2) {
+      // Second finger just landed — this becomes a pinch, not a drag.
+      // Drop whatever single-finger drag state the first finger had
+      // already accumulated (releasing its capture if CAPTURE_THRESHOLD
+      // had already kicked in — see onMove) and start the pinch baseline
+      // fresh off both fingers' CURRENT positions, so the handoff itself
+      // never reads as a jump.
+      if (this._pointerId != null && e.currentTarget.hasPointerCapture && e.currentTarget.hasPointerCapture(this._pointerId)) {
+        e.currentTarget.releasePointerCapture(this._pointerId);
+      }
+      this._pointerId = null;
+      this._captured = false;
+      this._dragMoves = null;
+      const pts = [...this._pointers.values()];
+      this._enterPinch(pts[0], pts[1]);
+      this.setState({ dragging: false, navigating: false });
+      return;
+    }
+    if (this._pointers.size !== 1) return; // 3rd+ finger (e.g. a resting palm) — tracked above, otherwise ignored
+
     // Capture is deferred to onMove now (see CAPTURE_THRESHOLD there), NOT
     // set here on every pointerdown. setPointerCapture retargets every
     // subsequent event for this pointer to e.currentTarget — INCLUDING the
@@ -1456,6 +1581,7 @@ class Component extends DCLogic {
     // retargeted to this div, so its onClick never fired. Waiting for real
     // movement before capturing lets a simple click resolve normally, while
     // still capturing in time to keep an actual drag robust (see onMove).
+    this._gesture = 'pan';
     this._pointerId = e.pointerId;
     this._captured = false;
     this._downX = e.clientX;
@@ -1464,7 +1590,52 @@ class Component extends DCLogic {
     this.setState({ dragging: true, navigating: false, lastX: e.clientX, lastY: e.clientY });
   };
   onMove = (e) => {
-    if (!this.state.dragging) return;
+    // Only update a pointer this component actually saw go down (onDown
+    // bails early with an overlay open, so that pointerId was never
+    // added here — without this guard its moves would still get counted,
+    // corrupting the pinch math below with a phantom pointer).
+    if (this._pointers.has(e.pointerId)) this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (this._gesture === 'pinch') {
+      const [p0, p1] = this._pointers.values();
+      const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      // Guards a near-zero origin.dist — two fingers registering at
+      // almost the same point on a fast simultaneous touchdown would
+      // otherwise blow up the ratio below for any small subsequent dist.
+      // zoomAt's own clamp would catch the result either way, but this
+      // avoids a jarring single-frame snap straight to the clamp boundary.
+      if (this._pinchOrigin && this._pinchOrigin.dist >= 1) {
+        // Absolute-from-gesture-start, NOT incremental: always recomputed
+        // from the frozen _pinchOrigin snapshot, never compounded frame to
+        // frame, so there's no way for floating-point error to accumulate
+        // over a long gesture. Expressed here as a factor relative to the
+        // CURRENT zoom (what zoomAt takes) purely so the call below can
+        // reuse zoomAt UNCHANGED — zoomAt keeps whatever world point is
+        // CURRENTLY under (mid.x,mid.y) fixed at that same screen point
+        // after the zoom, which is by construction a pure zoom with zero
+        // net pan (the anchor and the result are the same screen point),
+        // and it inherits the deep-zoom compass-pull for free. The actual
+        // two-finger PAN — the midpoint itself sliding across the screen
+        // between frames — is the separate translation below. Splitting
+        // it this way is what makes a real pinch (fingers spreading AND
+        // drifting at once) track smoothly frame to frame instead of
+        // drifting away from where the fingers actually are. Not gated by
+        // isPanLocked — mirrors handleWheel's zoom branch: zooming back
+        // out is the only way to unlock panning again, so it has to keep
+        // working right through the locked range.
+        const targetZoom = this._pinchOrigin.zoom * dist / this._pinchOrigin.dist;
+        this.zoomAt(targetZoom / this.state.zoom, mid.x, mid.y);
+        if (!this.isPanLocked()) {
+          const dx = mid.x - this._pinchLastMid.x, dy = mid.y - this._pinchLastMid.y;
+          if (dx || dy) this.setState(s => ({ camX: s.camX - dx / s.zoom, camY: s.camY - dy / s.zoom }));
+        }
+      }
+      this._pinchLastMid = mid;
+      return;
+    }
+
+    if (this._gesture !== 'pan' || !this.state.dragging) return;
     // Below this many px of total movement from pointerdown, this still
     // reads as a click-in-progress — no capture yet (see onDown). Once
     // crossed, capture kicks in for the rest of the gesture, restoring the
@@ -1474,7 +1645,14 @@ class Component extends DCLogic {
     if (!this._captured) {
       const dist = Math.hypot(e.clientX - this._downX, e.clientY - this._downY);
       if (dist < CAPTURE_THRESHOLD) return;
-      e.currentTarget.setPointerCapture(this._pointerId);
+      // Guarded: the browser can (rarely) no longer consider this pointerId
+      // "active" by the time this fires — e.g. the pinch→single-finger
+      // handoff in onUp hands off to a pointerId that was already live
+      // before this component started tracking it as primary. Capture is
+      // a robustness nice-to-have (keeps the drag alive if the finger
+      // strays outside the viewport), not a requirement for the pan math
+      // below — a failed capture should never cancel the whole gesture.
+      try { e.currentTarget.setPointerCapture(this._pointerId); } catch (err) {}
       this._captured = true;
     }
     // Checked live on every move (not just at onDown) since zoom can, in
@@ -1499,8 +1677,61 @@ class Component extends DCLogic {
       while (this._dragMoves.length > 2 && now - this._dragMoves[0].t > 80) this._dragMoves.shift();
     }
   };
-  onUp = (e) => {
-    if (this.state.dragging && this._dragMoves && this._dragMoves.length >= 2) {
+  // Shared by onUp (a deliberate release — may arm momentum) and onCancel
+  // (Safari/the OS abandoning the gesture — never arms momentum, never
+  // touches the camera beyond what the gesture had already legitimately
+  // applied up to this point). Keeping ONE function here instead of two
+  // near-duplicate handlers is itself part of removing the "duplicated
+  // gesture system" pattern — onUp/onCancel differ only in whether the
+  // final release is allowed to launch a momentum flick.
+  _endPointer = (e, { allowMomentum }) => {
+    const wasPinching = this._gesture === 'pinch';
+    this._pointers.delete(e.pointerId);
+    if (e && e.currentTarget && e.pointerId != null && e.currentTarget.hasPointerCapture && e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+
+    if (this._pointers.size >= 2) {
+      // 3+ fingers were down and one lifted — still pinching on whichever
+      // two remain. Reinitialize the pinch fresh off their CURRENT
+      // positions (never continue the old snapshot) so the lifted
+      // finger's absence doesn't itself read as a zoom/pan jump.
+      const pts = [...this._pointers.values()];
+      this._enterPinch(pts[0], pts[1]);
+      return;
+    }
+    this._pinchOrigin = null;
+    this._pinchLastMid = null;
+
+    if (wasPinching && this._pointers.size === 1) {
+      // Pinch → one finger lifted, one still down: hand off straight into
+      // a fresh single-finger drag on it rather than going dead until the
+      // user re-presses (matches how Photos/Maps handle the same lift).
+      // _dragMoves is seeded unconditionally here (even on a path that
+      // reached this via a cancel) so that if the user then genuinely
+      // releases this remaining finger, THAT release can still get a
+      // momentum flick — allowMomentum only needs to gate the actual
+      // velocity-arming step below, not permanently disable it for the
+      // rest of the interaction.
+      const [[pid, pt]] = this._pointers;
+      this._gesture = 'pan';
+      this._pointerId = pid;
+      this._captured = false;
+      this._downX = pt.x;
+      this._downY = pt.y;
+      this._dragMoves = [{ x: pt.x, y: pt.y, t: performance.now() }];
+      this.setState({ dragging: true, navigating: false, lastX: pt.x, lastY: pt.y });
+      return;
+    }
+    if (wasPinching) {
+      // Last finger of a pinch lifted/cancelled with no drag state to finalize.
+      this._gesture = 'idle';
+      this._captured = false;
+      this._pointerId = null;
+      return;
+    }
+
+    if (allowMomentum && this.state.dragging && this._dragMoves && this._dragMoves.length >= 2) {
       const first = this._dragMoves[0], last = this._dragMoves[this._dragMoves.length - 1];
       const dt = last.t - first.t;
       // dt is real elapsed time between two genuine pointermove samples, so
@@ -1520,12 +1751,18 @@ class Component extends DCLogic {
       }
     }
     this._dragMoves = null;
-    if (e && e.currentTarget && e.pointerId != null && e.currentTarget.hasPointerCapture && e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
     this._captured = false;
+    this._pointerId = null;
+    this._gesture = 'idle';
     this.setState({ dragging: false });
   };
+  onUp = (e) => this._endPointer(e, { allowMomentum: true });
+  // Fires when the OS/browser abandons an in-progress pointer (e.g. a
+  // system gesture, an alert, or the browser deciding it owns the touch)
+  // rather than the user deliberately lifting. Must reset gesture
+  // bookkeeping WITHOUT flinging momentum and WITHOUT any camera write of
+  // its own beyond what the gesture had already applied.
+  onCancel = (e) => this._endPointer(e, { allowMomentum: false });
 
   // A regular (prototype) method, not an arrow-function class field, so it's
   // available via `this.homeZoom()` even from inside the `state` field
@@ -2327,15 +2564,20 @@ class Component extends DCLogic {
     // back to auto. 'auto' here lets text show its normal I-beam and
     // links/buttons keep the pointer cursor they already set themselves.
     const overlayOpen = !!this.state.detail || this.state.searchOpen;
-    // touch-action:pan-x pan-y (not none) — lets iOS keep its native
-    // one-finger pan/momentum handling on the compositor thread instead of
-    // forcing every touchmove through JS, which is what was making panning
-    // feel sluggish. Any pan-* value already excludes pinch-zoom and
-    // double-tap-zoom on its own (those need the separate `pinch-zoom`
-    // keyword, not present here), so this doesn't reopen native pinch —
-    // the touchstart listener above (componentDidMount) is what actually
-    // stops iOS's Tab Overview gesture from stealing the two-finger touch.
-    const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:pan-x pan-y;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};`;
+    // touch-action:none — real on-device testing overturned the earlier
+    // pan-x/pan-y attempt here (see git history): letting iOS's native
+    // one-finger pan run alongside this component's OWN pointer-driven
+    // drag/pinch logic (onDown/onMove/onUp) made the canvas fight itself —
+    // native panning and the JS state machine both trying to own the same
+    // gesture. `none` gives JS exclusive, unambiguous ownership of every
+    // touch gesture on the canvas — both the single-finger drag AND the
+    // two-finger pinch (see onDown/onMove/onUp) are fully hand-rolled now,
+    // so there's nothing left for native touch handling to usefully do
+    // here. iOS's Tab Overview steal is a SEPARATE problem from this CSS
+    // property (touch-action:none alone never stopped it, before OR after
+    // this) — that's the non-passive touchstart/touchmove listeners in
+    // componentDidMount, which is still needed with this value.
+    const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:none;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};`;
 
     // Deep-zoom easter egg: continuing to zoom out past NORMAL_MIN_ZOOM now
     // keeps going instead of hitting a hard floor (see zoomAt's clamp) —
@@ -3002,6 +3244,31 @@ class Component extends DCLogic {
     const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${chromeInkFaint};background:${chromeBg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
     const compassBtnStyle = `position:fixed;bottom:24px;left:24px;z-index:70;width:38px;height:38px;background:none;border:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;`;
     const goCenter = () => this._glideHome();
+    // Fallback zoom controls — secondary to pinch (touch) and wheel/
+    // trackpad (desktop), which remain the primary way to zoom. Stacked
+    // above the compass button, same bottom-left corner. Both route
+    // through zoomAt exactly like every other zoom input in the file —
+    // zero new math, anchored at the viewport center (clientX===cx makes
+    // worldX===camX, so this is a plain "zoom in/out around wherever the
+    // camera already is").
+    const zoomBtnBase = `position:fixed;left:24px;z-index:70;width:32px;height:32px;border-radius:50%;border:1px solid ${chromeInkFaint};background:${chromeBg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
+    const zoomInBtnStyle = zoomBtnBase + `bottom:74px;`;
+    const zoomOutBtnStyle = zoomBtnBase + `bottom:112px;`;
+    const zoomIn = () => this.zoomAt(1.3, window.innerWidth / 2, window.innerHeight / 2);
+    const zoomOut = () => this.zoomAt(1 / 1.3, window.innerWidth / 2, window.innerHeight / 2);
+    // ?debug=1 HUD (see componentDidMount) — reads _gesture/_pointers
+    // directly rather than mirroring them into state: every path that
+    // changes either already calls setState in the same handler, so
+    // they're always fresh by the time this renders. Zero extra renders,
+    // on or off.
+    const debugOn = this._debug;
+    const debugHudWrapStyle = `position:fixed;top:8px;left:8px;z-index:100;background:rgba(0,0,0,0.72);padding:6px 9px;pointer-events:none;display:flex;flex-direction:column;gap:2px;`;
+    const debugRowStyle = `font-family:'Space Mono',monospace;font-size:10px;color:#0f0;white-space:pre;`;
+    const debugCamX = `camera.x     ${this.state.camX.toFixed(1)}`;
+    const debugCamY = `camera.y     ${this.state.camY.toFixed(1)}`;
+    const debugZoom = `camera.zoom  ${this.state.zoom.toFixed(3)}`;
+    const debugGestureLabel = `gesture      ${this._gesture}`;
+    const debugPointerCount = `pointers     ${this._pointers.size}`;
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
     const closeSearch = () => this.setState({ searchOpen: false });
     const stop = (e) => e.stopPropagation();
@@ -3261,7 +3528,7 @@ class Component extends DCLogic {
       deepSceneActive, deepTerminusClass, deepTerminusStyle, deepCentralClass, deepCentralStyle, deepFooterStyle,
       deepSceneStyle, deepOrbitClass, deepFragStars, deepBubble, deepBubbleOpen, deepDismissStyle, deepBubbleDismiss,
       deepExit: this._exitDeepZoom,
-      onDown: this.onDown, onMove: this.onMove, onUp: this.onUp,
+      onDown: this.onDown, onMove: this.onMove, onUp: this.onUp, onCancel: this.onCancel,
       signBoxStyle,
       signLabelRightStyle, signLabelLeftStyle, signLabelDownStyle, signLabelUpStyle,
       goEdito, goDocu, goPoesie, goManifeste,
@@ -3269,6 +3536,8 @@ class Component extends DCLogic {
       navStyle, brandStyle, contactStyle, contactLabel, copyEmail: this.copyEmail, grainStyle,
       chromeInk,
       searchBtnStyle, compassBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
+      zoomInBtnStyle, zoomOutBtnStyle, zoomIn, zoomOut,
+      debugOn, debugHudWrapStyle, debugRowStyle, debugCamX, debugCamY, debugZoom, debugGestureLabel, debugPointerCount,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
       previewSrc, previewImgStyle,
