@@ -475,14 +475,6 @@
     <svg width="16" height="16" viewBox="0 0 16 16" style="display:block;"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="{{chromeInk}}" stroke-width="1.3"></circle><line x1="10.3" y1="10.3" x2="15" y2="15" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
   </button>
 
-  <!-- ============= ZOOM IN/OUT (fallback controls — secondary to pinch/wheel) ============= -->
-  <button onClick="{{zoomIn}}" style="{{zoomInBtnStyle}}">
-    <svg width="14" height="14" viewBox="0 0 14 14" style="display:block;"><line x1="7" y1="1" x2="7" y2="13" stroke="{{chromeInk}}" stroke-width="1.3"></line><line x1="1" y1="7" x2="13" y2="7" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
-  </button>
-  <button onClick="{{zoomOut}}" style="{{zoomOutBtnStyle}}">
-    <svg width="14" height="14" viewBox="0 0 14 14" style="display:block;"><line x1="1" y1="7" x2="13" y2="7" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
-  </button>
-
   <!-- ============= DEBUG HUD (?debug=1) ============= -->
   <sc-if value="{{debugOn}}" hint-placeholder-val="{{ false }}">
     <div style="{{debugHudWrapStyle}}">
@@ -491,6 +483,8 @@
       <div style="{{debugRowStyle}}">{{debugZoom}}</div>
       <div style="{{debugRowStyle}}">{{debugGestureLabel}}</div>
       <div style="{{debugRowStyle}}">{{debugPointerCount}}</div>
+      <div style="{{debugRowStyle}}">{{debugDistDelta}}</div>
+      <div style="{{debugRowStyle}}">{{debugMidDelta}}</div>
     </div>
   </sc-if>
 
@@ -677,6 +671,29 @@ const CX = 2848.82;
 // fires ~60×/s so its per-event rate can be high and still feel gradual.
 // PINCH_RATE also covers a heuristic-"trackpad" non-pinch event.
 const PINCH_ZOOM_RATE = 0.016, MOUSE_ZOOM_RATE = 0.0042;
+
+// ── Two-finger gesture arbitration (touch pan-vs-pinch) ─────────────────
+// A second finger landing does NOT mean "pinch" — see onDown/onMove's
+// 'twoFingerPending' handling. Real two-finger contact is ambiguous at
+// first (a natural two-finger swipe always has SOME incidental spread
+// change even when the intent is pure pan), so the gesture sits in
+// 'twoFingerPending' — panning by midpoint delta only, zoom untouched —
+// until the finger-to-finger DISTANCE has moved enough to read as a
+// deliberate pinch, at which point (and only then) it escalates to
+// 'pinch' for the rest of the gesture (one-way — pinch never falls back
+// to pan; see the design note on _endPointer/onMove for why).
+//
+// Two switchable implementations of the same threshold, tune by flipping
+// PINCH_ACTIVATE_MODE:
+//  - 'px': a flat CSS-pixel change in finger-to-finger distance.
+//  - 'ratio': a fraction of the ORIGINAL finger-to-finger distance —
+//    generally the more consistent feel, since the same flat px delta
+//    reads very differently depending on how far apart the fingers
+//    started (10px on a 300px spread is a 3% change; 10px on a 60px
+//    spread is 17%) — a ratio threshold normalizes for that.
+const PINCH_ACTIVATE_MODE = 'ratio'; // 'px' | 'ratio' — tune here
+const PINCH_ACTIVATE_PX = 10;        // used when PINCH_ACTIVATE_MODE === 'px'
+const PINCH_ACTIVATE_RATIO = 0.05;   // used when PINCH_ACTIVATE_MODE === 'ratio' (5%)
 // The normal interactive zoom-out floor and a much lower floor that opens
 // up a "deep zoom" easter-egg range below it — see zoomAt's clamp and
 // renderVals' deepT below, which is what actually stages the visuals
@@ -1487,34 +1504,91 @@ class Component extends DCLogic {
   // pointerId — {x,y} last-known screen position.
   _pointers = new Map();
 
-  // Explicit gesture-ownership state machine: 'idle' | 'pan' | 'pinch'.
+  // Debug-HUD-only readouts (see ?debug=1 in componentDidMount and the
+  // debugOn block in renderVals) — the live finger-to-finger distance and
+  // midpoint delta from the current two-finger gesture's origin, for
+  // tuning PINCH_ACTIVATE_* on a real device. Updated in onMove's
+  // 'twoFingerPending'/'pinch' branches, reset to 0 in _endPointer.
+  _debugDistDelta = 0;
+  _debugMidDelta = 0;
+
+  // Explicit gesture-ownership state machine:
+  //   'idle' | 'pan' | 'twoFingerPending' | 'pinch'
   // Everything in onDown/onMove/_endPointer branches off THIS, not off
   // this._pointers.size or this.state.dragging re-derived independently in
   // three places — a single source of truth for "what gesture owns the
   // canvas right now" is what onMove needs to route input correctly, and
   // what the debug HUD (renderVals) reads directly for display.
+  //
+  // 'twoFingerPending' is the key state: a second finger landing does NOT
+  // mean pinch (see PINCH_ACTIVATE_* above) — it means "two fingers are
+  // down, panning by their midpoint, watching finger-to-finger DISTANCE
+  // for a deliberate pinch." It only escalates to 'pinch' once that
+  // distance has moved past the activation threshold; midpoint movement
+  // alone, however large, never triggers zoom on its own — the two
+  // channels (midpoint = pan, distance = zoom) are read independently, as
+  // requested. The escalation is one-way: once in 'pinch', a gesture never
+  // falls back to 'twoFingerPending'/'pan' for the rest of that touch
+  // (matches tldraw's own pinch-state-machine precedent, read from
+  // packages/editor/src/lib/hooks/useGestureEvents.ts on github.com/
+  // tldraw/tldraw before implementing this — their 'zooming' state is
+  // permanent for the same reason: once a user has committed to a pinch,
+  // reverting to pan mid-gesture because of a momentary flat patch in
+  // distance would read as far more erratic than just finishing the zoom
+  // out). Escalation FROM twoFingerPending TO pinch, by contrast, stays
+  // live for the whole two-finger gesture, not just its first frame — you
+  // can start two-finger panning and squeeze into a pinch at any point
+  // without lifting, per tldraw's same precedent (their 'panning' state
+  // keeps checking for a distance threshold on every subsequent frame).
   _gesture = 'idle';
 
-  // Snapshot taken once, at the moment a pinch STARTS (fresh two-finger
-  // touchdown, or a 1→2 or 3→2 finger-count change mid-gesture — see
-  // onDown/_endPointer, both of which call _enterPinch fresh rather than
-  // ever continuing stale values, per the "reinit from current camera on
-  // finger-count change" requirement). dist/zoom drive the absolute (not
-  // incremental) zoom formula in onMove: zoom = origin.zoom * dist/origin.dist
-  // — recomputed fresh from this frozen snapshot every frame, so it can
-  // never compound floating-point drift over a long gesture the way
-  // multiplying by the PREVIOUS frame's ratio would. camX/camY/worldX/
-  // worldY are captured for completeness/diagnostics (debug HUD) even
-  // though the per-frame math below only actually consumes zoom/dist —
-  // the camera write itself still goes through zoomAt (see onMove), which
-  // is what keeps the deep-zoom compass-pull and pan-lock behavior
-  // correct for free instead of reimplementing them here.
+  // Snapshot taken the instant a two-finger gesture BEGINS arbitrating
+  // (fresh two-finger touchdown, or a 3→2 finger-count change while still
+  // pending — see onDown/_endPointer). Only what the arbitration decision
+  // and the debug HUD's delta readouts need: the starting distance and
+  // midpoint. Camera isn't snapshotted here — while pending, panning is
+  // applied as a plain incremental translate (see onMove), the same way
+  // the old single-finger path always has; there's no "zoom origin" to
+  // preserve until a pinch is actually entered.
+  _twoFingerOrigin = null;
+  // Last frame's midpoint, while pending — drives the incremental pan
+  // translate exactly like _pinchLastMid does once escalated.
+  _twoFingerLastMid = null;
+
+  // Snapshot taken once, at the moment a pinch STARTS — either escalating
+  // out of 'twoFingerPending' (see _pinchShouldActivate in onMove) or a
+  // 3→2 finger-count change while ALREADY pinching (see _endPointer).
+  // Critically, this is called with the CURRENT two points and CURRENT
+  // camera at the moment of the call, never stale ones — that's what
+  // "rebase the pinch origin so there's no jump on activation" means in
+  // practice: escalating just calls this fresh, so the very first pinch
+  // frame's target zoom is origin.zoom * dist/dist === origin.zoom (no
+  // change) and the pan delta is mid-vs-itself === 0 (no change) — the
+  // transition is mathematically a no-op at the instant it happens.
+  // dist/zoom drive the absolute (not incremental) zoom formula in onMove:
+  // zoom = origin.zoom * dist/origin.dist — recomputed fresh from this
+  // frozen snapshot every frame, so it can never compound floating-point
+  // drift over a long gesture the way multiplying by the PREVIOUS frame's
+  // ratio would. camX/camY/worldX/worldY are captured for completeness/
+  // diagnostics even though the per-frame math below only actually
+  // consumes zoom/dist — the camera write itself still goes through
+  // zoomAt (see onMove), which is what keeps the deep-zoom compass-pull
+  // and pan-lock behavior correct for free instead of reimplementing them
+  // here.
   _pinchOrigin = null;
-  // Last frame's two-finger midpoint — the ONE incremental piece of pinch
-  // state, needed only for the two-finger PAN component (the midpoint
-  // itself sliding across the screen between frames). Reset alongside
-  // _pinchOrigin every time a pinch (re)starts.
+  // Last frame's two-finger midpoint once pinching — the ONE incremental
+  // piece of pinch state, needed only for the two-finger PAN component
+  // (the midpoint itself sliding across the screen between frames).
+  // Reset alongside _pinchOrigin every time a pinch (re)starts.
   _pinchLastMid = null;
+
+  _enterTwoFingerPending = (p1, p2) => {
+    const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+    const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+    this._twoFingerOrigin = { dist, mid };
+    this._twoFingerLastMid = mid;
+    this._gesture = 'twoFingerPending';
+  };
 
   _enterPinch = (p1, p2) => {
     const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -1528,6 +1602,17 @@ class Component extends DCLogic {
     };
     this._pinchLastMid = mid;
     this._gesture = 'pinch';
+  };
+
+  // The activation test itself — one place so onMove and the debug HUD
+  // agree on exactly what "past threshold" means. originDist guarded
+  // against near-zero (two fingers registering almost on top of each
+  // other on a fast simultaneous touchdown) so the ratio mode can't
+  // divide by ~0 and read as "instantly past threshold" from noise alone.
+  _pinchShouldActivate = (originDist, currentDist) => {
+    const delta = Math.abs(currentDist - originDist);
+    if (PINCH_ACTIVATE_MODE === 'px') return delta > PINCH_ACTIVATE_PX;
+    return delta > Math.max(originDist, 1) * PINCH_ACTIVATE_RATIO;
   };
 
   onDown = (e) => {
@@ -1551,10 +1636,13 @@ class Component extends DCLogic {
     this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (this._pointers.size === 2) {
-      // Second finger just landed — this becomes a pinch, not a drag.
-      // Drop whatever single-finger drag state the first finger had
+      // Second finger just landed — NOT a pinch yet (see PINCH_ACTIVATE_*
+      // and _gesture's own comment above): starts arbitrating as
+      // 'twoFingerPending', which pans by midpoint delta only until/unless
+      // finger-to-finger distance moves enough to read as a deliberate
+      // pinch. Drop whatever single-finger drag state the first finger had
       // already accumulated (releasing its capture if CAPTURE_THRESHOLD
-      // had already kicked in — see onMove) and start the pinch baseline
+      // had already kicked in — see onMove) and start the pending baseline
       // fresh off both fingers' CURRENT positions, so the handoff itself
       // never reads as a jump.
       if (this._pointerId != null && e.currentTarget.hasPointerCapture && e.currentTarget.hasPointerCapture(this._pointerId)) {
@@ -1564,11 +1652,20 @@ class Component extends DCLogic {
       this._captured = false;
       this._dragMoves = null;
       const pts = [...this._pointers.values()];
-      this._enterPinch(pts[0], pts[1]);
+      this._enterTwoFingerPending(pts[0], pts[1]);
       this.setState({ dragging: false, navigating: false });
       return;
     }
-    if (this._pointers.size !== 1) return; // 3rd+ finger (e.g. a resting palm) — tracked above, otherwise ignored
+    if (this._pointers.size !== 1) {
+      // 3rd+ finger (e.g. a resting palm) — tracked above (so a later lift
+      // is handled correctly, see _endPointer), otherwise ignored: no
+      // gesture-state change, no setState. Debug-only exception: without
+      // SOME render, the ?debug=1 pointer-count readout would go stale
+      // until the next event that happens to setState anyway — a
+      // real-device tuning session should see it update immediately.
+      if (this._debug) this.forceUpdate();
+      return;
+    }
 
     // Capture is deferred to onMove now (see CAPTURE_THRESHOLD there), NOT
     // set here on every pointerdown. setPointerCapture retargets every
@@ -1596,10 +1693,46 @@ class Component extends DCLogic {
     // corrupting the pinch math below with a phantom pointer).
     if (this._pointers.has(e.pointerId)) this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
+    if (this._gesture === 'twoFingerPending') {
+      const [p0, p1] = this._pointers.values();
+      const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      const origin = this._twoFingerOrigin;
+      if (origin) {
+        // Debug HUD readouts — updated regardless of _debug so the values
+        // are always current the instant it's toggled on; the cost is one
+        // subtraction/hypot per move event, negligible next to everything
+        // else this component already recomputes per frame.
+        this._debugDistDelta = dist - origin.dist;
+        this._debugMidDelta = Math.hypot(mid.x - origin.mid.x, mid.y - origin.mid.y);
+        if (this._pinchShouldActivate(origin.dist, dist)) {
+          // Distance moved past the threshold — this reads as a
+          // deliberate pinch now. Escalate by rebasing a FRESH pinch
+          // origin off the CURRENT two points (not the original
+          // touchdown ones) — see _enterPinch's own comment for why that
+          // makes the transition a mathematical no-op at this exact
+          // instant, i.e. no jump.
+          this._enterPinch(p0, p1);
+          return;
+        }
+        // Still below threshold: two-finger PAN only, by midpoint delta —
+        // zoom is untouched here, deliberately no call to zoomAt or write
+        // to state.zoom anywhere in this branch.
+        if (!this.isPanLocked()) {
+          const dx = mid.x - this._twoFingerLastMid.x, dy = mid.y - this._twoFingerLastMid.y;
+          if (dx || dy) this.setState(s => ({ camX: s.camX - dx / s.zoom, camY: s.camY - dy / s.zoom }));
+        }
+      }
+      this._twoFingerLastMid = mid;
+      return;
+    }
+
     if (this._gesture === 'pinch') {
       const [p0, p1] = this._pointers.values();
       const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
       const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
+      this._debugDistDelta = this._pinchOrigin ? dist - this._pinchOrigin.dist : 0;
+      this._debugMidDelta = this._pinchOrigin ? Math.hypot(mid.x - this._pinchOrigin.mid.x, mid.y - this._pinchOrigin.mid.y) : 0;
       // Guards a near-zero origin.dist — two fingers registering at
       // almost the same point on a fast simultaneous touchdown would
       // otherwise blow up the ratio below for any small subsequent dist.
@@ -1685,34 +1818,48 @@ class Component extends DCLogic {
   // gesture system" pattern — onUp/onCancel differ only in whether the
   // final release is allowed to launch a momentum flick.
   _endPointer = (e, { allowMomentum }) => {
-    const wasPinching = this._gesture === 'pinch';
+    // Covers both two-finger states — a lifted finger collapses either
+    // 'twoFingerPending' or an already-escalated 'pinch' the same way
+    // (hand off to single-finger pan, or reinit on a 3rd finger — see
+    // below); which one it WAS only matters for choosing which reinit to
+    // call in the 3→2 branch immediately below.
+    const priorGesture = this._gesture;
+    const wasTwoFingerish = priorGesture === 'pinch' || priorGesture === 'twoFingerPending';
     this._pointers.delete(e.pointerId);
     if (e && e.currentTarget && e.pointerId != null && e.currentTarget.hasPointerCapture && e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
 
     if (this._pointers.size >= 2) {
-      // 3+ fingers were down and one lifted — still pinching on whichever
-      // two remain. Reinitialize the pinch fresh off their CURRENT
+      // 3+ fingers were down and one lifted — still a two-finger gesture
+      // on whichever two remain. Reinitialize fresh off their CURRENT
       // positions (never continue the old snapshot) so the lifted
-      // finger's absence doesn't itself read as a zoom/pan jump.
+      // finger's absence doesn't itself read as a zoom/pan jump — staying
+      // in whichever state (pending vs. already-escalated pinch) this
+      // gesture was already in, since escalation is one-way and a
+      // 3rd-finger lift shouldn't be able to de-escalate an active pinch.
       const pts = [...this._pointers.values()];
-      this._enterPinch(pts[0], pts[1]);
+      if (priorGesture === 'pinch') this._enterPinch(pts[0], pts[1]);
+      else this._enterTwoFingerPending(pts[0], pts[1]);
       return;
     }
     this._pinchOrigin = null;
     this._pinchLastMid = null;
+    this._twoFingerOrigin = null;
+    this._twoFingerLastMid = null;
+    this._debugDistDelta = 0;
+    this._debugMidDelta = 0;
 
-    if (wasPinching && this._pointers.size === 1) {
-      // Pinch → one finger lifted, one still down: hand off straight into
-      // a fresh single-finger drag on it rather than going dead until the
-      // user re-presses (matches how Photos/Maps handle the same lift).
-      // _dragMoves is seeded unconditionally here (even on a path that
-      // reached this via a cancel) so that if the user then genuinely
-      // releases this remaining finger, THAT release can still get a
-      // momentum flick — allowMomentum only needs to gate the actual
-      // velocity-arming step below, not permanently disable it for the
-      // rest of the interaction.
+    if (wasTwoFingerish && this._pointers.size === 1) {
+      // Two-finger gesture (pending or pinch) → one finger lifted, one
+      // still down: hand off straight into a fresh single-finger drag on
+      // it rather than going dead until the user re-presses (matches how
+      // Photos/Maps handle the same lift). _dragMoves is seeded
+      // unconditionally here (even on a path that reached this via a
+      // cancel) so that if the user then genuinely releases this
+      // remaining finger, THAT release can still get a momentum flick —
+      // allowMomentum only needs to gate the actual velocity-arming step
+      // below, not permanently disable it for the rest of the interaction.
       const [[pid, pt]] = this._pointers;
       this._gesture = 'pan';
       this._pointerId = pid;
@@ -1723,8 +1870,9 @@ class Component extends DCLogic {
       this.setState({ dragging: true, navigating: false, lastX: pt.x, lastY: pt.y });
       return;
     }
-    if (wasPinching) {
-      // Last finger of a pinch lifted/cancelled with no drag state to finalize.
+    if (wasTwoFingerish) {
+      // Last finger of a two-finger gesture lifted/cancelled with no drag
+      // state to finalize.
       this._gesture = 'idle';
       this._captured = false;
       this._pointerId = null;
@@ -3244,23 +3392,13 @@ class Component extends DCLogic {
     const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${chromeInkFaint};background:${chromeBg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
     const compassBtnStyle = `position:fixed;bottom:24px;left:24px;z-index:70;width:38px;height:38px;background:none;border:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;`;
     const goCenter = () => this._glideHome();
-    // Fallback zoom controls — secondary to pinch (touch) and wheel/
-    // trackpad (desktop), which remain the primary way to zoom. Stacked
-    // above the compass button, same bottom-left corner. Both route
-    // through zoomAt exactly like every other zoom input in the file —
-    // zero new math, anchored at the viewport center (clientX===cx makes
-    // worldX===camX, so this is a plain "zoom in/out around wherever the
-    // camera already is").
-    const zoomBtnBase = `position:fixed;left:24px;z-index:70;width:32px;height:32px;border-radius:50%;border:1px solid ${chromeInkFaint};background:${chromeBg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
-    const zoomInBtnStyle = zoomBtnBase + `bottom:74px;`;
-    const zoomOutBtnStyle = zoomBtnBase + `bottom:112px;`;
-    const zoomIn = () => this.zoomAt(1.3, window.innerWidth / 2, window.innerHeight / 2);
-    const zoomOut = () => this.zoomAt(1 / 1.3, window.innerWidth / 2, window.innerHeight / 2);
-    // ?debug=1 HUD (see componentDidMount) — reads _gesture/_pointers
-    // directly rather than mirroring them into state: every path that
-    // changes either already calls setState in the same handler, so
-    // they're always fresh by the time this renders. Zero extra renders,
-    // on or off.
+    // ?debug=1 HUD (see componentDidMount) — reads _gesture/_pointers/
+    // _debugDistDelta/_debugMidDelta directly rather than mirroring them
+    // into state: every path that changes them already calls setState in
+    // the same handler, so they're always fresh by the time this renders.
+    // Zero extra renders, on or off. distDelta/midDelta are what
+    // PINCH_ACTIVATE_* (see its own comment) actually compares against —
+    // this is the readout for tuning that threshold on a real device.
     const debugOn = this._debug;
     const debugHudWrapStyle = `position:fixed;top:8px;left:8px;z-index:100;background:rgba(0,0,0,0.72);padding:6px 9px;pointer-events:none;display:flex;flex-direction:column;gap:2px;`;
     const debugRowStyle = `font-family:'Space Mono',monospace;font-size:10px;color:#0f0;white-space:pre;`;
@@ -3269,6 +3407,8 @@ class Component extends DCLogic {
     const debugZoom = `camera.zoom  ${this.state.zoom.toFixed(3)}`;
     const debugGestureLabel = `gesture      ${this._gesture}`;
     const debugPointerCount = `pointers     ${this._pointers.size}`;
+    const debugDistDelta = `distDelta    ${this._debugDistDelta.toFixed(1)}px`;
+    const debugMidDelta = `midDelta     ${this._debugMidDelta.toFixed(1)}px`;
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
     const closeSearch = () => this.setState({ searchOpen: false });
     const stop = (e) => e.stopPropagation();
@@ -3536,8 +3676,8 @@ class Component extends DCLogic {
       navStyle, brandStyle, contactStyle, contactLabel, copyEmail: this.copyEmail, grainStyle,
       chromeInk,
       searchBtnStyle, compassBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
-      zoomInBtnStyle, zoomOutBtnStyle, zoomIn, zoomOut,
       debugOn, debugHudWrapStyle, debugRowStyle, debugCamX, debugCamY, debugZoom, debugGestureLabel, debugPointerCount,
+      debugDistDelta, debugMidDelta,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
       previewSrc, previewImgStyle,
