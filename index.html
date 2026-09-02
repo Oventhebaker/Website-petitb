@@ -496,8 +496,10 @@
            capture threshold, retargeting the eventual click to the canvas
            root instead of the link. Restored — deliberately, not a blind
            revert of the whole fix, just this one non-multi-touch-relevant
-           element. -->
-      <div class="deep-scene-footer" style="{{deepFooterStyle}}">carte communautaire d'observation diaphane<br>(pour participer envoyer moi simplement un <a href="mailto:petitbouquetin.media@gmail.com" onPointerDown="{{stop}}">email</a>)</div>
+           element.
+           href="{{deepFooterEmailHref}}", NOT a literal mailto: string —
+           see deepFooterEmailHref's own comment in renderVals. -->
+      <div class="deep-scene-footer" style="{{deepFooterStyle}}">carte communautaire d'observation diaphane<br>(pour participer envoyer moi simplement un <a href="{{deepFooterEmailHref}}" onPointerDown="{{stop}}">email</a>)</div>
     </div>
   </sc-if>
 
@@ -3096,6 +3098,19 @@ class Component extends DCLogic {
     const deepCentralStyle = `opacity:${deepOpacity.toFixed(3)};transform:scale(${centralScale.toFixed(3)});--pa:${pulseAmp.toFixed(3)}`;
     const deepSceneStyle = `position:absolute;inset:0;pointer-events:none;opacity:${sceneP.toFixed(3)};transform:scale(${deepSceneScale.toFixed(4)})`;
     const deepFooterStyle = `opacity:${sceneP.toFixed(3)}`; // rides the scene fade
+    // Built from parts at render time, deliberately NOT a literal
+    // `mailto:address` string anywhere in this file — Cloudflare's Email
+    // Address Obfuscation rewrites any href="mailto:..." it finds in the
+    // page's static HTML (this template block, before this JS ever runs)
+    // into its own decode-script redirect, which showed an intermediate
+    // Cloudflare page here instead of opening the mail client directly.
+    // Obfuscation stays ON site-wide (still wanted for the OTHER, plain
+    // mailto: links elsewhere in this file, e.g. copyEmail's own href and
+    // the genesis-scroll credit) — this is the one link Cloudflare should
+    // never see a real mailto: string for in the first place, since the
+    // string is only ever assembled here, client-side, after Cloudflare's
+    // static scan already happened.
+    const deepFooterEmailHref = 'mailto:' + ['petitbouquetin.media', 'gmail.com'].join('@');
     // Static now — the rotation itself is a direct DOM write from
     // _tickOrbit (JS/rAF), not a CSS class/animation; see its own comment.
     const deepOrbitClass = 'deep-orbit';
@@ -3888,7 +3903,7 @@ class Component extends DCLogic {
     return {
       appStyle, worldStyle, worldVisible, ink,
       deepZoomWrapStyle, deepZoomBackStyle, deepZoomDiscStyle, flashStyle,
-      deepSceneActive, deepTerminusClass, deepTerminusStyle, deepCentralClass, deepCentralStyle, deepFooterStyle,
+      deepSceneActive, deepTerminusClass, deepTerminusStyle, deepCentralClass, deepCentralStyle, deepFooterStyle, deepFooterEmailHref,
       deepSceneStyle, deepOrbitClass, deepFragStars, deepBubble, deepBubbleOpen, deepDismissStyle, deepBubbleDismiss,
       deepExit: this._exitDeepZoom,
       onDown: this.onDown, onMove: this.onMove, onUp: this.onUp, onCancel: this.onCancel,
