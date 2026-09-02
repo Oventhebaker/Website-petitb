@@ -182,6 +182,23 @@
     .deep-central-star::before {
       content: ''; position: absolute; inset: -22px; border-radius: 50%;
     }
+    /* Small hint that clicking/tapping the central star returns to the
+       canvas — same reveal language as .deep-frag-bubble (opacity-only
+       fade, nothing else animated). Mouse-hover only, like the fragment
+       stars' own :hover glow-brighten just below — the star's onClick
+       (deepExit) needs no separate touch affordance since tapping it IS
+       the action, this is purely a discoverability hint for a pointing
+       device. Positioned off the star's own box (100% top + margin) so it
+       never competes with .deep-central-star::before's hit area above. */
+    .deep-central-label {
+      position: absolute; top: 100%; left: 50%; margin-top: 12px;
+      transform: translateX(-50%);
+      font-family: 'Courier Prime', monospace; font-size: 11px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: #cdddf0; white-space: nowrap; pointer-events: none;
+      opacity: 0; transition: opacity 0.22s ease;
+    }
+    .deep-terminus--live .deep-central-star:hover + .deep-central-label { opacity: 1; }
     .deep-frag-star {
       position: absolute;
       /* All identical, 12px, integer centring. Any remaining "some look
@@ -448,15 +465,16 @@
       <div class="deep-scene" style="{{deepSceneStyle}}">
         <div class="{{deepOrbitClass}}" data-deep-orbit>
           <sc-for list="{{deepFragStars}}" as="s" hint-placeholder-count="23">
-            <div class="deep-frag-star" data-cull-anim style="{{s.style}}" onPointerEnter="{{s.onEnter}}" onPointerLeave="{{s.onLeave}}" onPointerDown="{{s.onDown}}" onPointerUp="{{s.onTap}}"></div>
+            <div class="deep-frag-star" data-cull-anim style="{{s.style}}" onPointerEnter="{{s.onEnter}}" onPointerLeave="{{s.onLeave}}" onPointerUp="{{s.onTap}}"></div>
           </sc-for>
         </div>
       </div>
       <div class="{{deepCentralClass}}" style="{{deepCentralStyle}}">
         <button class="deep-central-star" data-cull-anim onClick="{{deepExit}}"></button>
+        <div class="deep-central-label">rentrer</div>
       </div>
       <div class="{{deepBubble.cls}}" style="{{deepBubble.style}}">{{ deepBubble.text }}<span class="sig">{{ deepBubble.sig }}</span></div>
-      <div class="deep-scene-footer" style="{{deepFooterStyle}}">carte communautaire d'observation diaphane<br>(pour participer envoyer moi simplement un <a href="mailto:petitbouquetin.media@gmail.com" onPointerDown="{{stop}}">email</a>)</div>
+      <div class="deep-scene-footer" style="{{deepFooterStyle}}">carte communautaire d'observation diaphane<br>(pour participer envoyer moi simplement un <a href="mailto:petitbouquetin.media@gmail.com">email</a>)</div>
     </div>
   </sc-if>
 
@@ -3113,15 +3131,36 @@ class Component extends DCLogic {
         style: `left:${cx}px;top:${cy}px;--tw:${(7 + (i % 4) * 1.2).toFixed(1)}s;--td:-${(i * 1.6 + 0.5).toFixed(1)}s;--star-bg:${starColor.hex};--star-glow:${starColor.rgb}`,
         onEnter: (e) => { if (e.pointerType === 'touch') return; this.setState(snapStar(i, e.currentTarget)); },
         onLeave: (e) => { if (e && e.pointerType === 'touch') return; this.setState((s) => (s.starHover === i ? { starHover: null } : null)); },
-        // Tap toggles this fragment's bubble. stopPropagation so the tap is
-        // not also read as the start of a canvas pan.
+        // Tap toggles this fragment's bubble. Used to stopPropagation() here
+        // (and on a matching onDown, removed) so a tap was never also read
+        // as the start of a canvas pan — but that's exactly what broke
+        // multi-touch: stopping a star's pointerdown from bubbling made
+        // that finger invisible to the canvas's OWN pointer tracking
+        // entirely, so a pinch with one finger over a star registered as
+        // only one finger, and a pinch finger that happened to LIFT over a
+        // star never reached _endPointer at all, permanently orphaning it
+        // in _pointers (confirmed both directions empirically). The canvas
+        // needs to see every pointerdown/up unconditionally to track
+        // finger count correctly — same principle project cards already
+        // rely on (no stopPropagation there either; a plain click resolves
+        // naturally because capture is deferred past a movement threshold,
+        // see onMove's CAPTURE_THRESHOLD). Single-finger taps still don't
+        // get captured for exactly that reason, so they're never at risk
+        // of misreading as a drag.
+        //
+        // The one thing capture-deferral doesn't cover — a genuine
+        // multi-touch release landing on a star must NOT also read as a
+        // tap on it — is handled directly: this._pointers still includes
+        // the other finger at the moment this fires (it runs before the
+        // event reaches the canvas's _endPointer, which is what actually
+        // removes it), so >1 means a second finger was down when this one
+        // lifted — not a plain tap, don't toggle.
         onTap: (e) => {
           if (e.pointerType === 'mouse') return;
-          e.stopPropagation();
+          if (this._pointers.size > 1) return;
           const snap = snapStar(i, e.currentTarget);
           this.setState((s) => (s.starHover === i ? { starHover: null } : snap));
         },
-        onDown: (e) => { if (e.pointerType !== 'mouse') e.stopPropagation(); },
       };
     });
 
@@ -3169,7 +3208,19 @@ class Component extends DCLogic {
     // through to here. Only mounted while a bubble is open.
     const deepBubbleOpen = sh != null;
     const deepDismissStyle = `position:absolute;inset:0;z-index:0;pointer-events:auto;background:transparent`;
-    const deepBubbleDismiss = (e) => { e.stopPropagation(); this.setState({ starHover: null }); };
+    // No stopPropagation() here — same reasoning, and same bug, as the
+    // fragment-star fix above: this catcher covers the FULL viewport
+    // while a bubble is open, so blocking bubbling would have silently
+    // swallowed any pinch-finger release that happened to land anywhere
+    // on open canvas at that moment, not just on a star. A plain dismiss
+    // tap is already safe from misreading as a drag via the same deferred-
+    // capture mechanism every other element in this file relies on. The
+    // _pointers.size guard is the same one too: a multi-touch release
+    // shouldn't also dismiss the bubble as a side effect.
+    const deepBubbleDismiss = (e) => {
+      if (this._pointers.size > 1) return;
+      this.setState({ starHover: null });
+    };
 
     // ── Wrap-seam fade ────────────────────────────────────────────────
     // The world is ONE 6000×6000 div positioned by dispX/dispY (camX/camY
