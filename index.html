@@ -119,12 +119,21 @@
       0%, 100% { opacity: 0.8; }
       50%      { opacity: 1; }
     }
-    /* One shared slow rotation for the whole ring of fragment-stars. CSS
-       animation, not JS: pausing it (any star hovered → .is-paused) freezes
-       every star together and resuming continues from the same angle, no
-       jump, no reverse — exactly the "hold still while I read, then carry
-       on" behaviour, for free. ~220s per revolution ≈ ghost-tile-slow. */
-    @keyframes deepOrbitSpin { to { transform: rotate(360deg); } }
+    /* One shared slow rotation for the whole ring of fragment-stars.
+       Deliberately JS/rAF-driven (_tickOrbit), NOT a CSS animation — it
+       used to be `animation: deepOrbitSpin 220s linear infinite` with
+       `.is-paused { animation-play-state: paused }` toggled on hover, which
+       reads as correct (freeze in place, resume from the same angle, no
+       jump) everywhere except Safari: WebKit re-runs a compositor-promoted
+       CSS animation's "play" procedure with auto-rewind on resume, so
+       pausing/resuming a transform animation there doesn't reliably freeze
+       at the current computed angle — see the real fix (_tickOrbit) for
+       the actual mechanics. Only the container's own transform is ever
+       written (once per frame, only while not paused, direct DOM write —
+       see _tickOrbit), so this is exactly as cheap as the CSS version
+       regardless of how many stars are nested inside it: the ring is one
+       rigid body, not 23 independent animations. ~220s per revolution ≈
+       ghost-tile-slow (see ORBIT_DEG_PER_MS). */
 
     /* Night-sky backing for the fragment ring (true pitch-black, see the
        grain fade in renderVals), scaled as a whole by deepSceneScale.
@@ -138,9 +147,7 @@
       position: absolute; inset: 0;
       transform-origin: 50% 50%;
       will-change: transform;
-      animation: deepOrbitSpin 220s linear infinite;
     }
-    .deep-orbit.is-paused { animation-play-state: paused; }
 
     .deep-central .deep-central-star,
     .deep-orbit .deep-frag-star { pointer-events: none; }
@@ -286,10 +293,13 @@
        hide-don't-unmount the world, no live mix-blend). Rules here are the
        parts expressible in pure CSS; they must never affect Blink/Gecko. */
     @supports (background: -webkit-named-image(apple-pay-logo-black)) {
-      /* The ring's own infinite rotation already promotes it to a layer;
+      /* The ring's own frequent transform writes (_tickOrbit, JS/rAF —
+         see its own comment) already promote it to a layer on the fly;
          an explicit will-change on top is just permanent backing-store
-         memory, which WebKit (no compositor thread to hand it to) is
-         documented to be punished by rather than helped. */
+         memory for however long a star stays hovered (paused = no
+         writes, so nothing to composite), which WebKit (no compositor
+         thread to hand it to) is documented to be punished by rather
+         than helped. */
       .deep-orbit { will-change: auto; }
       /* Same reasoning for the hover-shadow puck — its opacity fade is
          driven inline only while it's actually animating (see shadowStyle
@@ -424,8 +434,9 @@
        whiteout disc (deepDiscR·2) mid-shrink so the two are one object,
        not a handoff; clicking it tweens the camera out (_exitDeepZoom).
        .deep-scene holds the black backing + .deep-orbit, which rotates
-       the whole fragment ring slowly as one body (paused via is-paused
-       while any fragment is hovered). Fragments are hover-only; the bubble
+       the whole fragment ring slowly as one body (JS/rAF-driven, see
+       _tickOrbit — halted, not CSS-paused, while any fragment is
+       hovered). Fragments are hover-only; the bubble
        anchors to the star's captured on-screen point. Styling is in the
        <style> block; only live scale/opacity/position are inline. See
        DEEP_FRAGMENTS and the scene block in renderVals. -->
@@ -435,7 +446,7 @@
         <div style="{{deepDismissStyle}}" onPointerUp="{{deepBubbleDismiss}}"></div>
       </sc-if>
       <div class="deep-scene" style="{{deepSceneStyle}}">
-        <div class="{{deepOrbitClass}}">
+        <div class="{{deepOrbitClass}}" data-deep-orbit>
           <sc-for list="{{deepFragStars}}" as="s" hint-placeholder-count="23">
             <div class="deep-frag-star" data-cull-anim style="{{s.style}}" onPointerEnter="{{s.onEnter}}" onPointerLeave="{{s.onLeave}}" onPointerDown="{{s.onDown}}" onPointerUp="{{s.onTap}}"></div>
           </sc-for>
@@ -694,6 +705,11 @@ const PINCH_ZOOM_RATE = 0.016, MOUSE_ZOOM_RATE = 0.0042;
 const PINCH_ACTIVATE_MODE = 'ratio'; // 'px' | 'ratio' — tune here
 const PINCH_ACTIVATE_PX = 10;        // used when PINCH_ACTIVATE_MODE === 'px'
 const PINCH_ACTIVATE_RATIO = 0.05;   // used when PINCH_ACTIVATE_MODE === 'ratio' (5%)
+
+// Deep-zoom constellation ring's rotation speed — 360° per 220s, same rate
+// the CSS @keyframes version used, now driven by _tickOrbit (JS/rAF) — see
+// its own comment for why.
+const ORBIT_DEG_PER_MS = 360 / (220 * 1000);
 // The normal interactive zoom-out floor and a much lower floor that opens
 // up a "deep zoom" easter-egg range below it — see zoomAt's clamp and
 // renderVals' deepT below, which is what actually stages the visuals
@@ -780,8 +796,8 @@ const STAR_PALETTE = [
 // per-star variation, ~0.78–1.24, deliberately scattered so an even ring
 // reads as a constellation rather than a dial while never bunching stars
 // together. The whole ring rotates as one slow rigid body (see
-// @keyframes deepOrbitSpin), so the even angular spacing is preserved
-// forever. text may contain literal newlines (fragments 19 & 20 are
+// _tickOrbit), so the even angular spacing is preserved forever. text may
+// contain literal newlines (fragments 19 & 20 are
 // two-voice dialogue) — the bubble renders them as line breaks
 // (white-space: pre-line). Which slot a fragment lands in carries no
 // meaning.
@@ -1100,6 +1116,11 @@ class Component extends DCLogic {
     // can't recompute it — but the orbit freezes on hover, so a snapshot
     // stays anchored for as long as the bubble is up).
     starHover: null, starHoverX: 0, starHoverY: 0,
+    // Whether the deep-zoom constellation's DOM subtree is actually
+    // mounted — deliberately NOT the same thing as "deepT has crossed
+    // 0.45" (see componentDidUpdate). Starts false; only componentDidUpdate
+    // ever flips it, one rAF after the raw threshold is crossed.
+    deepSceneReady: false,
   };
 
   componentDidMount() {
@@ -1284,6 +1305,50 @@ class Component extends DCLogic {
       if (!this._animObserved.has(el)) { this._animObserved.add(el); this._animObs.observe(el); }
     }
   };
+
+  // ---- Deep-zoom constellation ring rotation (JS/rAF, not CSS) --------
+  // Replaces a CSS `animation: … infinite` + `.is-paused` toggle that read
+  // as correct everywhere except Safari — see the .deep-orbit CSS comment
+  // and the class-declaration comment above _pinchShouldActivate for the
+  // full "why". This is direct-DOM-write, bypassing React entirely (same
+  // technique the rest of this file uses for anything updated every
+  // frame), and it's the ONLY per-frame write regardless of star count —
+  // the ring is one rotating parent, the stars are just its children.
+  //
+  // _orbitAngle persists in degrees across pause/resume (never reset), so
+  // resuming after a hover always continues from exactly where it stopped
+  // — no CSS animation object involved at all, so there is nothing for any
+  // engine to "rewind." _orbitLastTick advances every tick REGARDLESS of
+  // whether the angle itself is currently advancing, specifically so the
+  // first frame after a resume sees a normal ~16ms dt (one frame's worth),
+  // not the entire paused duration — otherwise unpausing would jump.
+  _orbitAngle = 0;
+  _orbitLastTick = 0;
+  _orbitRaf = null;
+
+  _tickOrbit = (now) => {
+    const dt = this._orbitLastTick ? now - this._orbitLastTick : 0;
+    this._orbitLastTick = now;
+    if (this.state.starHover == null) {
+      this._orbitAngle = (this._orbitAngle + dt * ORBIT_DEG_PER_MS) % 360;
+      // Re-queried every frame rather than cached: the element unmounts
+      // and remounts fresh with the rest of the constellation subtree
+      // (see deepSceneReady), so a cached reference would go stale across
+      // that cycle. A single attribute-selector query is cheap enough at
+      // 60fps to not be worth the bookkeeping to avoid it.
+      const el = document.querySelector('[data-deep-orbit]');
+      if (el) el.style.transform = `rotate(${this._orbitAngle}deg)`;
+    }
+    this._orbitRaf = requestAnimationFrame(this._tickOrbit);
+  };
+  _startOrbit = () => {
+    if (this._orbitRaf) return;
+    this._orbitLastTick = 0; // next tick's dt starts at 0, not a stale gap
+    this._orbitRaf = requestAnimationFrame(this._tickOrbit);
+  };
+  _stopOrbit = () => {
+    if (this._orbitRaf) { cancelAnimationFrame(this._orbitRaf); this._orbitRaf = null; }
+  };
   componentWillUnmount() {
     window.removeEventListener('wheel', this._onWheel);
     if (this._canvasEl) {
@@ -1300,6 +1365,8 @@ class Component extends DCLogic {
     this._cancelDeepExit();
     this._cancelGlideHome();
     if (this._maskRaf) { cancelAnimationFrame(this._maskRaf); this._maskRaf = null; }
+    if (this._deepSceneReadyRaf) { cancelAnimationFrame(this._deepSceneReadyRaf); this._deepSceneReadyRaf = null; }
+    this._stopOrbit();
     if (this._animObs) { this._animObs.disconnect(); this._animObs = null; }
   }
 
@@ -1309,9 +1376,64 @@ class Component extends DCLogic {
     // both cross here as `zoom` moves. Re-scan for new [data-cull-anim]
     // targets on either transition. (The wrap-flash that used to live here
     // moved into renderVals — see wrapMask/flashStyle — because a
-    // post-commit hook is a frame too late to mask the jump.)
-    const deepNow = deepZoomT(this.state.zoom) > 0.45; // match deepSceneActive's mount gate
+    // post-commit hook is a frame too late to mask the jump.) This covers
+    // the WORLD subtree's own transition; the constellation's re-scan is
+    // separate, below, since ITS mount is now deliberately delayed a frame
+    // past this same raw threshold (see deepSceneReady).
+    const deepNow = deepZoomT(this.state.zoom) > 0.45; // matches the raw threshold below
     if (deepNow !== this._deepCullState) { this._deepCullState = deepNow; this._observeAnimated(); }
+
+    // Bug: on Safari, pinching/scrolling out toward the deep-zoom starfield
+    // could stall mid-gesture, requiring the user to lift and restart —
+    // reproduced with plain ctrlKey wheel events too (desktop trackpad
+    // pinch), so it was never touch-specific. Root cause, confirmed by
+    // measurement (Chromium, forced synchronous layout right after the
+    // threshold-crossing event: ~1-2ms/event steady-state, 6.8ms on the
+    // exact frame the constellation subtree mounts — a 4-7x spike in a
+    // fast engine with nothing else contending). That mount was ALREADY
+    // deliberately placed ~0.10 deepT before it becomes visible (see
+    // deepSceneActive's own comment in renderVals) specifically because
+    // its first paint is expensive on Safari — but pre-warming "while
+    // invisible" only hides the JANK, not the underlying stall: the mount
+    // still lands in the SAME synchronous commit as whatever wheel/pointer
+    // event pushed zoom past the threshold, which is exactly the moment a
+    // physical trackpad-pinch gesture is most sensitive to the main thread
+    // going quiet (WebKit's own wheel-gesture delivery waits on a
+    // main-thread round-trip per bugs.webkit.org #219384 — a long enough
+    // stall there is a plausible way for Safari to consider the physical
+    // gesture abandoned rather than deliver the rest of it).
+    //
+    // Fix: decouple the ACTUAL mount from that synchronous commit by one
+    // rAF. The wheel/pointer event that crosses the threshold does nothing
+    // expensive and returns immediately; the heavy mount+first-paint lands
+    // on its own animation-frame callback instead, off the critical path
+    // of any specific input event's synchronous handling. deepSceneActive
+    // (renderVals) reads this flag, NOT the raw threshold, so it lags the
+    // real crossing by exactly one frame — imperceptible given the
+    // existing ~0.10 deepT invisible pre-warm window is far larger than
+    // that already.
+    const deepRaw = deepZoomT(this.state.zoom) > 0.45;
+    if (deepRaw) {
+      if (!this.state.deepSceneReady && !this._deepSceneReadyRaf) {
+        this._deepSceneReadyRaf = requestAnimationFrame(() => {
+          this._deepSceneReadyRaf = null;
+          // The re-scan for the constellation's own new [data-cull-anim]
+          // stars has to wait for THIS mount specifically — the
+          // _deepCullState rescan above ran a frame earlier, before these
+          // elements existed, and won't fire again on its own since the
+          // raw threshold itself didn't change a second time.
+          this.setState({ deepSceneReady: true }, () => { this._observeAnimated(); this._startOrbit(); });
+        });
+      }
+    } else {
+      // Zoom is back above the normal floor: cancel any deferred mount
+      // that hadn't landed yet (a quick in-and-back-out shouldn't mount at
+      // all) and unmount immediately if it had already landed — unmounting
+      // is cheap on WebKit (no rasterization to redo), so no need to defer
+      // that direction too.
+      if (this._deepSceneReadyRaf) { cancelAnimationFrame(this._deepSceneReadyRaf); this._deepSceneReadyRaf = null; }
+      if (this.state.deepSceneReady) { this.setState({ deepSceneReady: false }); this._stopOrbit(); }
+    }
   }
 
   // ---- Momentum -------------------------------------------------------
@@ -1423,6 +1545,7 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit();
     this._cancelGlideHome();
+    this._resetGestureState(); // see its own comment — defensive, for the deep-zoom-return bug
     const x0 = this.state.camX, y0 = this.state.camY, z0 = this.state.zoom;
     // Shortest wrap-aware target: the CX/CY-equivalent (CX + kW) nearest
     // the current camera, so a far-wrapped pan eases the short way home
@@ -1465,6 +1588,7 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit();
     this._cancelGlideHome();
+    this._resetGestureState(); // see its own comment — defensive, for the deep-zoom-return bug
     if (this.state.starHover != null) this.setState({ starHover: null }); // drop any open bubble as the scene collapses
     const startZoom = this.state.zoom;
     const targetZoom = this.homeZoom();
@@ -1613,6 +1737,38 @@ class Component extends DCLogic {
     const delta = Math.abs(currentDist - originDist);
     if (PINCH_ACTIVATE_MODE === 'px') return delta > PINCH_ACTIVATE_PX;
     return delta > Math.max(originDist, 1) * PINCH_ACTIVATE_RATIO;
+  };
+
+  // Defensive reset for the reported "navigation broken after returning
+  // from deep-zoom" bug — called from the two DELIBERATE "snap back to
+  // normal" entry points (_glideHome/compass and _exitDeepZoom/clicking
+  // the terminus star), on the theory that if a gesture ever got
+  // interrupted by Bug 1's stall in a way that left _pointers/_gesture
+  // holding a stale entry no ordinary pointerup/pointercancel arrived to
+  // clear, at least these two explicit "go back to normal" actions
+  // guarantee a clean slate for whatever the user does next. This is
+  // insurance, not a confirmed fix: it can only help (idle-but-already-
+  // clean state is a harmless no-op) and can't make a genuine in-flight
+  // gesture worse, since both call sites already only fire when nothing
+  // else has claimed control (see their own _cancel*/_stopMomentum calls).
+  // If the reported bug still reproduces after Bug 1's own fix, that's
+  // the signal this wasn't the actual mechanism — check the ?debug=1 HUD's
+  // gesture/pointer readout right after a stall to see directly whether
+  // either was left non-idle with nothing physically still touching.
+  _resetGestureState = () => {
+    this._pointers.clear();
+    this._gesture = 'idle';
+    this._pinchOrigin = null;
+    this._pinchLastMid = null;
+    this._twoFingerOrigin = null;
+    this._twoFingerLastMid = null;
+    this._debugDistDelta = 0;
+    this._debugMidDelta = 0;
+    this._pointerId = null;
+    this._captured = false;
+    this._downX = 0;
+    this._downY = 0;
+    this._dragMoves = null;
   };
 
   onDown = (e) => {
@@ -2871,9 +3027,10 @@ class Component extends DCLogic {
     //    own gentle settle (deepSceneScale, re-derived from the SAME
     //    deepDiscR as centralScale so the two share one driver), and a
     //    .deep-orbit child that rotates the whole ring slowly as one rigid
-    //    body (CSS @keyframes deepOrbitSpin). Any star hovered → orbit
-    //    .is-paused → every star freezes together; unhover resumes from
-    //    the same angle.
+    //    body (JS/rAF, see _tickOrbit — a CSS animation-play-state toggle
+    //    used to drive this but didn't freeze in place reliably on Safari).
+    //    Any star hovered → orbit angle stops advancing → every star
+    //    freezes together; unhover resumes from the same angle.
     //
     // sceneP is the fragment ring's opacity; everything here is a pure
     // function of the live zoom, so the exit tween replays it in reverse
@@ -2883,8 +3040,17 @@ class Component extends DCLogic {
     // central-star box-shadows get their first (expensive, one-off in
     // Safari) rasterisation while still invisible and while the whiteout
     // veil is up, instead of all at once on the same frame the world
-    // subtree unmounts. Kept in sync with componentDidUpdate's cull re-scan.
-    const deepSceneActive = deepT > 0.45;
+    // subtree unmounts.
+    //
+    // Reads state.deepSceneReady, NOT `deepT > 0.45` directly — the actual
+    // mount is deliberately deferred one rAF past that raw crossing (see
+    // componentDidUpdate) so its first, expensive paint never lands in the
+    // SAME synchronous commit as whatever wheel/pointer event pushed zoom
+    // past the threshold, which was stalling live pinch/trackpad gestures
+    // on Safari right at this point. One frame of extra delay is invisible
+    // given the ~0.10 deepT gap below is already a much larger invisible
+    // window. Kept in sync with componentDidUpdate's cull re-scan.
+    const deepSceneActive = this.state.deepSceneReady;
     const smooth01 = (t) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
     const sceneP = smooth01((deepT - 0.55) / 0.30);
     const deepVW = window.innerWidth, deepVH = window.innerHeight;
@@ -2911,17 +3077,20 @@ class Component extends DCLogic {
     const deepCentralStyle = `opacity:${deepOpacity.toFixed(3)};transform:scale(${centralScale.toFixed(3)});--pa:${pulseAmp.toFixed(3)}`;
     const deepSceneStyle = `position:absolute;inset:0;pointer-events:none;opacity:${sceneP.toFixed(3)};transform:scale(${deepSceneScale.toFixed(4)})`;
     const deepFooterStyle = `opacity:${sceneP.toFixed(3)}`; // rides the scene fade
-    const deepOrbitClass = 'deep-orbit' + (this.state.starHover != null ? ' is-paused' : '');
+    // Static now — the rotation itself is a direct DOM write from
+    // _tickOrbit (JS/rAF), not a CSS class/animation; see its own comment.
+    const deepOrbitClass = 'deep-orbit';
 
     // Even angular spacing — angle = index · (2π/N) + phase — so no cluster
     // however many fragments there are; rf is the only per-star variation.
-    // These are the ring's rest positions; .deep-orbit's CSS rotation
+    // These are the ring's rest positions; _tickOrbit's JS-driven rotation
     // sweeps them around the centre.
     const deepOrbitR = Math.min(deepVW, deepVH) * DEEP_ORBIT_R_FRAC;
     // Reveal model: a mouse HOVERS (pointerenter/leave); touch TAPS
     // (pointerup toggles). Both funnel through the same starHover state, so
-    // the bubble, the orbit freeze (.is-paused) and the anchor snapshot are
-    // identical whichever opened it. e.pointerType splits them — a touch
+    // the bubble, the orbit freeze (_tickOrbit reads state.starHover
+    // directly) and the anchor snapshot are identical whichever opened it.
+    // e.pointerType splits them — a touch
     // also fires pointerenter/leave (enter on down, leave on up), which
     // unguarded would flash the bubble only while the finger is held, so
     // enter/leave ignore touch and the tap toggle is touch/pen only.
