@@ -184,12 +184,18 @@
     }
     /* Small hint that clicking/tapping the central star returns to the
        canvas — same reveal language as .deep-frag-bubble (opacity-only
-       fade, nothing else animated). Mouse-hover only, like the fragment
-       stars' own :hover glow-brighten just below — the star's onClick
-       (deepExit) needs no separate touch affordance since tapping it IS
-       the action, this is purely a discoverability hint for a pointing
-       device. Positioned off the star's own box (100% top + margin) so it
-       never competes with .deep-central-star::before's hit area above. */
+       fade, nothing else animated). NOT hover-gated (was, briefly) — a
+       phone has no cursor to preview a hover state with before committing
+       to the tap, so a hover-only hint is invisible to exactly the
+       touch users who'd need it most. Shown unconditionally once settled
+       instead, for every input type alike. Positioned off the star's own
+       box (100% top + margin) so it never competes with
+       .deep-central-star::before's hit area above. Gated on
+       .deep-central--still (pulseAmp hit 0 in renderVals, deepT ≥0.90 —
+       the star has already finished shrinking to its small final rest
+       size), NOT .deep-terminus--live (deepT ≥0.70, mid-transition) —
+       revealing it while the star is still large and actively shrinking
+       read as the label overlapping/fighting a giant moving shape. */
     .deep-central-label {
       position: absolute; top: 100%; left: 50%; margin-top: 12px;
       transform: translateX(-50%);
@@ -198,7 +204,7 @@
       color: #cdddf0; white-space: nowrap; pointer-events: none;
       opacity: 0; transition: opacity 0.22s ease;
     }
-    .deep-terminus--live .deep-central-star:hover + .deep-central-label { opacity: 1; }
+    .deep-central--still .deep-central-label { opacity: 1; }
     .deep-frag-star {
       position: absolute;
       /* All identical, 12px, integer centring. Any remaining "some look
@@ -374,6 +380,12 @@
       <a href="{{vinylItem.href}}" target="_blank" rel="noopener" style="{{vinylItem.wrapStyle}}"><img src="{{vinylItem.src}}" style="{{vinylItem.imgStyle}}"></img></a>
     </sc-if>
 
+    <!-- The sundial — sole entry point into the deep-zoom well. See
+         sundialItem/_enterDeepZoom in renderVals. -->
+    <sc-if value="{{sundialItem}}" hint-placeholder-val="{{ false }}">
+      <button style="{{sundialItem.wrapStyle}}" onClick="{{sundialItem.onClick}}"><img src="{{sundialItem.src}}" style="{{sundialItem.imgStyle}}"></img></button>
+    </sc-if>
+
     <!-- Édito zone -->
     <sc-for list="{{editoItems}}" as="p" hint-placeholder-count="11">
       <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
@@ -474,7 +486,18 @@
         <div class="deep-central-label">rentrer</div>
       </div>
       <div class="{{deepBubble.cls}}" style="{{deepBubble.style}}">{{ deepBubble.text }}<span class="sig">{{ deepBubble.sig }}</span></div>
-      <div class="deep-scene-footer" style="{{deepFooterStyle}}">carte communautaire d'observation diaphane<br>(pour participer envoyer moi simplement un <a href="mailto:petitbouquetin.media@gmail.com">email</a>)</div>
+      <!-- onPointerDown="{{stop}}" was removed from this link during the
+           fragment-star hitbox fix (same pattern, reasoned to be equally
+           redundant there) and that broke it: the star fix needed the
+           canvas to see every star touch for MULTI-TOUCH pinch tracking,
+           which this isolated 36×12px text link has no part in at all —
+           so there was nothing to gain by exposing it to the canvas, and
+           real cost: a tap this small routinely drifts past onMove's 4px
+           capture threshold, retargeting the eventual click to the canvas
+           root instead of the link. Restored — deliberately, not a blind
+           revert of the whole fix, just this one non-multi-touch-relevant
+           element. -->
+      <div class="deep-scene-footer" style="{{deepFooterStyle}}">carte communautaire d'observation diaphane<br>(pour participer envoyer moi simplement un <a href="mailto:petitbouquetin.media@gmail.com" onPointerDown="{{stop}}">email</a>)</div>
     </div>
   </sc-if>
 
@@ -503,19 +526,6 @@
   <button onClick="{{openSearch}}" style="{{searchBtnStyle}}">
     <svg width="16" height="16" viewBox="0 0 16 16" style="display:block;"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="{{chromeInk}}" stroke-width="1.3"></circle><line x1="10.3" y1="10.3" x2="15" y2="15" stroke="{{chromeInk}}" stroke-width="1.3"></line></svg>
   </button>
-
-  <!-- ============= DEBUG HUD (?debug=1) ============= -->
-  <sc-if value="{{debugOn}}" hint-placeholder-val="{{ false }}">
-    <div style="{{debugHudWrapStyle}}">
-      <div style="{{debugRowStyle}}">{{debugCamX}}</div>
-      <div style="{{debugRowStyle}}">{{debugCamY}}</div>
-      <div style="{{debugRowStyle}}">{{debugZoom}}</div>
-      <div style="{{debugRowStyle}}">{{debugGestureLabel}}</div>
-      <div style="{{debugRowStyle}}">{{debugPointerCount}}</div>
-      <div style="{{debugRowStyle}}">{{debugDistDelta}}</div>
-      <div style="{{debugRowStyle}}">{{debugMidDelta}}</div>
-    </div>
-  </sc-if>
 
   <sc-if value="{{searchOpen}}" hint-placeholder-val="{{ false }}">
     <div style="{{searchOverlayStyle}}" onClick="{{closeSearch}}">
@@ -940,7 +950,11 @@ const DECOR = [
   // center most of the time and hit hardest by the hover-magnify effect,
   // so it's the one piece where the aggressive resize pass would actually
   // show as visible pixelation.
-  { src: 'images/objet%20Image%20site/cadran_290x285.webp', w: 290, h: 285, fx: 2783.32, fy: 2934, fw: 131, fh: 132 },
+  // sundial: true — the sole entry point into the deep-zoom well (see
+  // _enterDeepZoom and sundialItem in renderVals). Pulled out of the plain
+  // decor loop into its own clickable element, same pattern as the vinyl's
+  // `href` below.
+  { src: 'images/objet%20Image%20site/cadran_290x285.webp', w: 290, h: 285, fx: 2783.32, fy: 2934, fw: 131, fh: 132, sundial: true },
   { src: 'images/objet%20Image%20site/plate_764x761_229x228.webp', w: 764, h: 761, fx: 3169.07, fy: 3485.39, fw: 123, fh: 124 },
   // Was the plain envelope (letter_2560x1811.webp) — swapped for the
   // golden medallion image that used to sit under Manifeste (see its old
@@ -1134,11 +1148,6 @@ class Component extends DCLogic {
     // can't recompute it — but the orbit freezes on hover, so a snapshot
     // stays anchored for as long as the bubble is up).
     starHover: null, starHoverX: 0, starHoverY: 0,
-    // Whether the deep-zoom constellation's DOM subtree is actually
-    // mounted — deliberately NOT the same thing as "deepT has crossed
-    // 0.45" (see componentDidUpdate). Starts false; only componentDidUpdate
-    // ever flips it, one rAF after the raw threshold is crossed.
-    deepSceneReady: false,
   };
 
   componentDidMount() {
@@ -1187,11 +1196,6 @@ class Component extends DCLogic {
       if (e.touches.length >= 2) e.preventDefault();
     };
     this._canvasEl.addEventListener('touchmove', this._onTouchMove, { passive: false });
-    // ?debug=1 shows a small on-canvas HUD (camera.x/y/zoom, active
-    // gesture, pointer count) for diagnosing gesture behavior on a real
-    // device — see the debugOn block in renderVals. Mirrors the existing
-    // ?inputprobe convention just below.
-    this._debug = new URLSearchParams(location.search).has('debug');
     // The camera-centered magnify effect (see renderVals' tileScale)
     // depends on window.innerWidth/innerHeight for its radius, so a
     // resize needs to trigger a re-render — a resize alone doesn't touch
@@ -1350,10 +1354,10 @@ class Component extends DCLogic {
     if (this.state.starHover == null) {
       this._orbitAngle = (this._orbitAngle + dt * ORBIT_DEG_PER_MS) % 360;
       // Re-queried every frame rather than cached: the element unmounts
-      // and remounts fresh with the rest of the constellation subtree
-      // (see deepSceneReady), so a cached reference would go stale across
-      // that cycle. A single attribute-selector query is cheap enough at
-      // 60fps to not be worth the bookkeeping to avoid it.
+      // and remounts fresh with the rest of the constellation subtree, so
+      // a cached reference would go stale across that cycle. A single
+      // attribute-selector query is cheap enough at 60fps to not be worth
+      // the bookkeeping to avoid it.
       const el = document.querySelector('[data-deep-orbit]');
       if (el) el.style.transform = `rotate(${this._orbitAngle}deg)`;
     }
@@ -1382,8 +1386,8 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit();
     this._cancelGlideHome();
+    this._cancelEnterDeepZoom();
     if (this._maskRaf) { cancelAnimationFrame(this._maskRaf); this._maskRaf = null; }
-    if (this._deepSceneReadyRaf) { cancelAnimationFrame(this._deepSceneReadyRaf); this._deepSceneReadyRaf = null; }
     this._stopOrbit();
     if (this._animObs) { this._animObs.disconnect(); this._animObs = null; }
   }
@@ -1392,65 +1396,30 @@ class Component extends DCLogic {
     // The world subtree (with its ghost tiles) unmounts/remounts around the
     // deep-zoom threshold and the constellation stars mount only past it —
     // both cross here as `zoom` moves. Re-scan for new [data-cull-anim]
-    // targets on either transition. (The wrap-flash that used to live here
-    // moved into renderVals — see wrapMask/flashStyle — because a
-    // post-commit hook is a frame too late to mask the jump.) This covers
-    // the WORLD subtree's own transition; the constellation's re-scan is
-    // separate, below, since ITS mount is now deliberately delayed a frame
-    // past this same raw threshold (see deepSceneReady).
-    const deepNow = deepZoomT(this.state.zoom) > 0.45; // matches the raw threshold below
-    if (deepNow !== this._deepCullState) { this._deepCullState = deepNow; this._observeAnimated(); }
-
-    // Bug: on Safari, pinching/scrolling out toward the deep-zoom starfield
-    // could stall mid-gesture, requiring the user to lift and restart —
-    // reproduced with plain ctrlKey wheel events too (desktop trackpad
-    // pinch), so it was never touch-specific. Root cause, confirmed by
-    // measurement (Chromium, forced synchronous layout right after the
-    // threshold-crossing event: ~1-2ms/event steady-state, 6.8ms on the
-    // exact frame the constellation subtree mounts — a 4-7x spike in a
-    // fast engine with nothing else contending). That mount was ALREADY
-    // deliberately placed ~0.10 deepT before it becomes visible (see
-    // deepSceneActive's own comment in renderVals) specifically because
-    // its first paint is expensive on Safari — but pre-warming "while
-    // invisible" only hides the JANK, not the underlying stall: the mount
-    // still lands in the SAME synchronous commit as whatever wheel/pointer
-    // event pushed zoom past the threshold, which is exactly the moment a
-    // physical trackpad-pinch gesture is most sensitive to the main thread
-    // going quiet (WebKit's own wheel-gesture delivery waits on a
-    // main-thread round-trip per bugs.webkit.org #219384 — a long enough
-    // stall there is a plausible way for Safari to consider the physical
-    // gesture abandoned rather than deliver the rest of it).
+    // targets on either transition, and start/stop the ring's JS-driven
+    // rotation (_tickOrbit) alongside the constellation's own mount. (The
+    // wrap-flash that used to live here moved into renderVals — see
+    // wrapMask/flashStyle — because a post-commit hook is a frame too late
+    // to mask the jump.)
     //
-    // Fix: decouple the ACTUAL mount from that synchronous commit by one
-    // rAF. The wheel/pointer event that crosses the threshold does nothing
-    // expensive and returns immediately; the heavy mount+first-paint lands
-    // on its own animation-frame callback instead, off the critical path
-    // of any specific input event's synchronous handling. deepSceneActive
-    // (renderVals) reads this flag, NOT the raw threshold, so it lags the
-    // real crossing by exactly one frame — imperceptible given the
-    // existing ~0.10 deepT invisible pre-warm window is far larger than
-    // that already.
-    const deepRaw = deepZoomT(this.state.zoom) > 0.45;
-    if (deepRaw) {
-      if (!this.state.deepSceneReady && !this._deepSceneReadyRaf) {
-        this._deepSceneReadyRaf = requestAnimationFrame(() => {
-          this._deepSceneReadyRaf = null;
-          // The re-scan for the constellation's own new [data-cull-anim]
-          // stars has to wait for THIS mount specifically — the
-          // _deepCullState rescan above ran a frame earlier, before these
-          // elements existed, and won't fire again on its own since the
-          // raw threshold itself didn't change a second time.
-          this.setState({ deepSceneReady: true }, () => { this._observeAnimated(); this._startOrbit(); });
-        });
-      }
-    } else {
-      // Zoom is back above the normal floor: cancel any deferred mount
-      // that hadn't landed yet (a quick in-and-back-out shouldn't mount at
-      // all) and unmount immediately if it had already landed — unmounting
-      // is cheap on WebKit (no rasterization to redo), so no need to defer
-      // that direction too.
-      if (this._deepSceneReadyRaf) { cancelAnimationFrame(this._deepSceneReadyRaf); this._deepSceneReadyRaf = null; }
-      if (this.state.deepSceneReady) { this.setState({ deepSceneReady: false }); this._stopOrbit(); }
+    // Deliberately a single, plain, SYNCHRONOUS check again — an earlier
+    // version of this deferred the constellation's mount by a full rAF
+    // specifically to keep its (Safari-expensive) first paint from landing
+    // in the same commit as whatever live pinch/wheel event pushed zoom
+    // past the threshold, since that was measured to be enough to stall an
+    // in-flight trackpad-pinch gesture on Safari. That whole class of
+    // problem no longer exists: zoom now only crosses this threshold via
+    // the sundial's own self-driven tween (_enterDeepZoom, not gesture
+    // input — see zoomAt's floor clamp), which isn't reading live pointer/
+    // wheel events to keep going, so there's no gesture left for a mount-
+    // time hitch to stall. A hitch there is now, at worst, one skipped
+    // frame in an otherwise ~1.5s self-paced animation — not worth the
+    // deferred-mount bookkeeping anymore.
+    const deepNow = deepZoomT(this.state.zoom) > 0.45;
+    if (deepNow !== this._deepCullState) {
+      this._deepCullState = deepNow;
+      this._observeAnimated();
+      if (deepNow) this._startOrbit(); else this._stopOrbit();
     }
   }
 
@@ -1563,6 +1532,7 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit();
     this._cancelGlideHome();
+    this._cancelEnterDeepZoom();
     this._resetGestureState(); // see its own comment — defensive, for the deep-zoom-return bug
     const x0 = this.state.camX, y0 = this.state.camY, z0 = this.state.zoom;
     // Shortest wrap-aware target: the CX/CY-equivalent (CX + kW) nearest
@@ -1606,6 +1576,7 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit();
     this._cancelGlideHome();
+    this._cancelEnterDeepZoom();
     this._resetGestureState(); // see its own comment — defensive, for the deep-zoom-return bug
     if (this.state.starHover != null) this.setState({ starHover: null }); // drop any open bubble as the scene collapses
     const startZoom = this.state.zoom;
@@ -1633,6 +1604,53 @@ class Component extends DCLogic {
     if (this._exitRaf) { cancelAnimationFrame(this._exitRaf); this._exitRaf = null; }
   };
 
+  // Sole entry point into the deep-zoom well — clicking/tapping the
+  // sundial (see the decor block in renderVals). Mirrors _exitDeepZoom's
+  // own shape exactly (self-driven rAF tween off performance.now(), not
+  // reading any pointer/wheel event to keep going), just carrying the
+  // camera the other way: from wherever the user currently is, in to
+  // DEEP_MIN_ZOOM, easing camX/camY toward the compass at the same time
+  // (_glideHome's own easeInOut, not _exitDeepZoom's easeOutCubic — this
+  // one has both position AND zoom converging together, so the gentler
+  // symmetric ease reads better than a "pull then settle" shape here).
+  // Same visual staging as before (whiteout, then starfield) for free —
+  // every deep-zoom visual in renderVals is already a pure function of
+  // live `zoom`, so driving zoom via a tween instead of a gesture doesn't
+  // need any staging logic of its own.
+  _enterDeepZoom = () => {
+    this._stopMomentum();
+    this._cancelDeepExit();
+    this._cancelGlideHome();
+    this._cancelEnterDeepZoom();
+    this._resetGestureState();
+    const x0 = this.state.camX, y0 = this.state.camY, startZoom = this.state.zoom;
+    const targetZoom = DEEP_MIN_ZOOM;
+    if (startZoom <= targetZoom) return;
+    const DUR = 1600; // slower than the 1150ms exit — "slowly and smoothly", explicitly asked for
+    const t0 = performance.now();
+    const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+    const step = (now) => {
+      const u = Math.min(1, (now - t0) / DUR);
+      const e = easeInOut(u);
+      this.setState({
+        camX: x0 + (CX - x0) * e,
+        camY: y0 + (CY - y0) * e,
+        zoom: startZoom * Math.pow(targetZoom / startZoom, e), // geometric — matches every other zoom tween
+        navigating: false,
+      });
+      if (u < 1) {
+        this._enterRaf = requestAnimationFrame(step);
+      } else {
+        this._enterRaf = null;
+        this.setState({ camX: CX, camY: CY, zoom: targetZoom, navigating: false });
+      }
+    };
+    this._enterRaf = requestAnimationFrame(step);
+  };
+  _cancelEnterDeepZoom = () => {
+    if (this._enterRaf) { cancelAnimationFrame(this._enterRaf); this._enterRaf = null; }
+  };
+
   copyEmail = (e) => {
     e.preventDefault();
     navigator.clipboard.writeText('petitbouquetin.media@gmail.com').then(() => {
@@ -1645,14 +1663,6 @@ class Component extends DCLogic {
   // Every currently-down pointer (touch, mouse, or pen), keyed by
   // pointerId — {x,y} last-known screen position.
   _pointers = new Map();
-
-  // Debug-HUD-only readouts (see ?debug=1 in componentDidMount and the
-  // debugOn block in renderVals) — the live finger-to-finger distance and
-  // midpoint delta from the current two-finger gesture's origin, for
-  // tuning PINCH_ACTIVATE_* on a real device. Updated in onMove's
-  // 'twoFingerPending'/'pinch' branches, reset to 0 in _endPointer.
-  _debugDistDelta = 0;
-  _debugMidDelta = 0;
 
   // Explicit gesture-ownership state machine:
   //   'idle' | 'pan' | 'twoFingerPending' | 'pinch'
@@ -1780,8 +1790,6 @@ class Component extends DCLogic {
     this._pinchLastMid = null;
     this._twoFingerOrigin = null;
     this._twoFingerLastMid = null;
-    this._debugDistDelta = 0;
-    this._debugMidDelta = 0;
     this._pointerId = null;
     this._captured = false;
     this._downX = 0;
@@ -1806,6 +1814,7 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelDeepExit(); // a real gesture takes over from any in-flight star-exit tween
     this._cancelGlideHome(); // …and from a compass return-to-center glide
+    this._cancelEnterDeepZoom(); // …and from an in-flight sundial entry tween
 
     this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
@@ -1830,16 +1839,7 @@ class Component extends DCLogic {
       this.setState({ dragging: false, navigating: false });
       return;
     }
-    if (this._pointers.size !== 1) {
-      // 3rd+ finger (e.g. a resting palm) — tracked above (so a later lift
-      // is handled correctly, see _endPointer), otherwise ignored: no
-      // gesture-state change, no setState. Debug-only exception: without
-      // SOME render, the ?debug=1 pointer-count readout would go stale
-      // until the next event that happens to setState anyway — a
-      // real-device tuning session should see it update immediately.
-      if (this._debug) this.forceUpdate();
-      return;
-    }
+    if (this._pointers.size !== 1) return; // 3rd+ finger (e.g. a resting palm) — tracked above (so a later lift is handled correctly, see _endPointer), otherwise ignored
 
     // Capture is deferred to onMove now (see CAPTURE_THRESHOLD there), NOT
     // set here on every pointerdown. setPointerCapture retargets every
@@ -1873,12 +1873,6 @@ class Component extends DCLogic {
       const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
       const origin = this._twoFingerOrigin;
       if (origin) {
-        // Debug HUD readouts — updated regardless of _debug so the values
-        // are always current the instant it's toggled on; the cost is one
-        // subtraction/hypot per move event, negligible next to everything
-        // else this component already recomputes per frame.
-        this._debugDistDelta = dist - origin.dist;
-        this._debugMidDelta = Math.hypot(mid.x - origin.mid.x, mid.y - origin.mid.y);
         if (this._pinchShouldActivate(origin.dist, dist)) {
           // Distance moved past the threshold — this reads as a
           // deliberate pinch now. Escalate by rebasing a FRESH pinch
@@ -1905,8 +1899,6 @@ class Component extends DCLogic {
       const [p0, p1] = this._pointers.values();
       const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y);
       const mid = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 };
-      this._debugDistDelta = this._pinchOrigin ? dist - this._pinchOrigin.dist : 0;
-      this._debugMidDelta = this._pinchOrigin ? Math.hypot(mid.x - this._pinchOrigin.mid.x, mid.y - this._pinchOrigin.mid.y) : 0;
       // Guards a near-zero origin.dist — two fingers registering at
       // almost the same point on a fast simultaneous touchdown would
       // otherwise blow up the ratio below for any small subsequent dist.
@@ -2021,8 +2013,6 @@ class Component extends DCLogic {
     this._pinchLastMid = null;
     this._twoFingerOrigin = null;
     this._twoFingerLastMid = null;
-    this._debugDistDelta = 0;
-    this._debugMidDelta = 0;
 
     if (wasTwoFingerish && this._pointers.size === 1) {
       // Two-finger gesture (pending or pinch) → one finger lifted, one
@@ -2185,6 +2175,7 @@ class Component extends DCLogic {
     e.preventDefault();
     this._cancelDeepExit(); // hand control back to the wheel if the star-exit tween is mid-flight
     this._cancelGlideHome(); // …or a compass return-to-center glide
+    this._cancelEnterDeepZoom(); // …or an in-flight sundial entry tween
     this._panVel = null; // a fresh wheel gesture should cut off any drag glide still in flight
 
     clearTimeout(this._wheelGestureTimer);
@@ -2236,26 +2227,41 @@ class Component extends DCLogic {
       const z0 = s.zoom;
       // Upper bound raised to 10 so the clamp never fights the viewport-
       // computed initial zoom (state.zoom above), which can exceed 2.5 on
-      // large screens. Lower bound is DEEP_MIN_ZOOM, not NORMAL_MIN_ZOOM —
-      // zooming out past the normal floor now continues into the deep-zoom
-      // easter egg (see renderVals' deepT) instead of stopping dead.
-      const z1 = Math.max(DEEP_MIN_ZOOM, Math.min(10, z0 * factor));
+      // large screens.
+      //
+      // Lower bound: gesture-driven zoom (this is the shared function both
+      // wheel and pinch call) can approach NORMAL_MIN_ZOOM but never cross
+      // it — deep-zoom is reachable ONLY via the sundial's self-driven
+      // tween now (_enterDeepZoom), never as a side effect of gesture
+      // magnitude. That's the whole point of this pass: the entire class
+      // of bugs from three rounds of pinch-vs-deep-zoom debugging (star
+      // hitboxes swallowing fingers, transition-timing races, WebKit
+      // gesture-abandonment on the mount) existed because a live gesture
+      // could be in flight exactly at the boundary; if it can never reach
+      // the boundary, none of that can happen, by construction.
+      //
+      // If zoom is ALREADY below the floor — the only way there is
+      // interrupting an in-flight _enterDeepZoom tween by starting a real
+      // gesture, which onDown/handleWheel both do via _cancelEnterDeepZoom
+      // — gesture zoom is fully inert, in EITHER direction: explicitly
+      // requested (the central star / compass are the only intended way
+      // to move once inside, full stop, not a fallback escape hatch via
+      // pinch). Not a soft-lock risk: the compass is unconditionally
+      // rendered regardless of zoom depth or scene-mount state, so it's
+      // always reachable to get back out even if this is hit mid-tween
+      // before the central star itself becomes clickable.
+      if (z0 < NORMAL_MIN_ZOOM) return null;
+      const z1 = Math.max(NORMAL_MIN_ZOOM, Math.min(10, z0 * factor));
       if (z1 === z0) return null;
       const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
       const worldX = s.camX + (clientX - cx) / z0;
       const worldY = s.camY + (clientY - cy) / z0;
       let camX = worldX + (z0 / z1) * (s.camX - worldX);
       let camY = worldY + (z0 / z1) * (s.camY - worldY);
-      // Deep-zoom easter egg: past the normal floor, continuously pull the
-      // camera toward the compass (CX,CY) — blended by the same deepZoomT
-      // progress renderVals' stages use, so it rides this exact zoom
-      // gesture rather than reading as a separate correction. By
-      // DEEP_MIN_ZOOM the pull is total (camera sits EXACTLY on the
-      // compass), so zooming back in from anywhere in the deep range
-      // always returns you centered there, not wherever you'd panned to
-      // before dipping in. No visible effect while actually deep (the
-      // world is faded/hidden behind the circle by then anyway) — it only
-      // matters for where you land once zoom crosses back into view.
+      // Same compass-pull as the entry/exit tweens use, kept here purely
+      // for the interrupted-tween edge case above (zooming back in from
+      // already being deep) — smooths where the camera lands rather than
+      // leaving it wherever the interrupted tween happened to freeze it.
       const dt = deepZoomT(z1);
       if (dt > 0) {
         camX += (CX - camX) * dt;
@@ -2414,7 +2420,7 @@ class Component extends DCLogic {
       if (it.fx !== undefined) {
         const cand = { x: it.fx, y: it.fy, w: it.fw, h: it.fh };
         allPlaced.push(cand);
-        return { src: it.src, x: cand.x, y: cand.y, w: cand.w, h: cand.h, href: it.href };
+        return { src: it.src, x: cand.x, y: cand.y, w: cand.w, h: cand.h, href: it.href, sundial: it.sundial };
       }
       // Long-edge 55-150px, keeping each item's true aspect ratio.
       const long = 55 + rand() * 95;
@@ -3058,17 +3064,12 @@ class Component extends DCLogic {
     // central-star box-shadows get their first (expensive, one-off in
     // Safari) rasterisation while still invisible and while the whiteout
     // veil is up, instead of all at once on the same frame the world
-    // subtree unmounts.
-    //
-    // Reads state.deepSceneReady, NOT `deepT > 0.45` directly — the actual
-    // mount is deliberately deferred one rAF past that raw crossing (see
-    // componentDidUpdate) so its first, expensive paint never lands in the
-    // SAME synchronous commit as whatever wheel/pointer event pushed zoom
-    // past the threshold, which was stalling live pinch/trackpad gestures
-    // on Safari right at this point. One frame of extra delay is invisible
-    // given the ~0.10 deepT gap below is already a much larger invisible
-    // window. Kept in sync with componentDidUpdate's cull re-scan.
-    const deepSceneActive = this.state.deepSceneReady;
+    // subtree unmounts. Plain synchronous threshold now (matches
+    // componentDidUpdate's own check) — zoom only reaches here via the
+    // sundial's self-driven tween, never a live gesture, so there's no
+    // gesture left for the mount's cost to stall; see componentDidUpdate's
+    // own comment for the fuller history.
+    const deepSceneActive = deepT > 0.45;
     const smooth01 = (t) => { const c = Math.max(0, Math.min(1, t)); return c * c * (3 - 2 * c); };
     const sceneP = smooth01((deepT - 0.55) / 0.30);
     const deepVW = window.innerWidth, deepVH = window.innerHeight;
@@ -3427,21 +3428,22 @@ class Component extends DCLogic {
 
     // Purely-decorative curios — no card background, no caption, no click;
     // just an absolutely-positioned image, matching how they're scattered
-    // in scatterDecor. The one entry with an `href` (the vinyl) is pulled
-    // out here and rendered as vinylItem below instead.
-    const decorItems = this._decor.filter((d) => !d.href).map((d) => ({
+    // in scatterDecor. The two marked entries (vinyl's `href`, the
+    // sundial's `sundial`) are pulled out here and rendered as their own
+    // elements below instead.
+    const decorItems = this._decor.filter((d) => !d.href && !d.sundial).map((d) => ({
       src: d.src,
       style: `position:absolute;left:${d.x}px;top:${d.y}px;width:${d.w}px;height:${d.h}px;` +
         `object-fit:contain;pointer-events:none;opacity:0.9;`,
     }));
 
-    // The lone clickable curio (vinyl → Spotify playlist). Rendered as an
-    // <a> so a genuine click navigates, but styled to read exactly like the
-    // decor around it: cursor inherits the canvas grab cursor (no pointer
-    // hint), same 0.9 opacity, no hover state. pointer-events:auto on the
-    // link (decor is :none) so it catches the click; the <img> stays :none
-    // so the link, not the image, is the target. A click-drag that moves
-    // >4px is captured by the app root (see onMove/setPointerCapture), which
+    // The vinyl curio (→ Spotify playlist). Rendered as an <a> so a genuine
+    // click navigates, but styled to read exactly like the decor around
+    // it: cursor inherits the canvas grab cursor (no pointer hint), same
+    // 0.9 opacity, no hover state. pointer-events:auto on the link (decor
+    // is :none) so it catches the click; the <img> stays :none so the
+    // link, not the image, is the target. A click-drag that moves >4px is
+    // captured by the app root (see onMove/setPointerCapture), which
     // retargets the pointerup+click away from this <a> — so dragging across
     // it pans the canvas and never navigates; only a clean click does.
     const _vinyl = this._decor.find((d) => d.href);
@@ -3450,6 +3452,24 @@ class Component extends DCLogic {
       wrapStyle: `position:absolute;left:${_vinyl.x}px;top:${_vinyl.y}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
         `display:block;pointer-events:auto;cursor:inherit;text-decoration:none;`,
       imgStyle: `width:100%;height:100%;object-fit:contain;pointer-events:none;opacity:0.9;`,
+    } : null;
+
+    // The sundial (cadran) — the SOLE entry point into the deep-zoom well
+    // (see _enterDeepZoom). A <button>, not a link (this triggers an
+    // in-page camera tween, not navigation) — same click-vs-drag safety as
+    // the vinyl above via the same underlying mechanism (capture past a
+    // 4px move threshold retargets the click away from any element, no
+    // stopPropagation needed here either — see the fragment-star fix's own
+    // comment for why that matters). Styled identically to the plain decor
+    // around it (no button chrome, no hover/focus ring, same 0.9 opacity)
+    // so it doesn't read as UI chrome sitting on the canvas.
+    const _sundial = this._decor.find((d) => d.sundial);
+    const sundialItem = _sundial ? {
+      src: _sundial.src,
+      wrapStyle: `position:absolute;left:${_sundial.x}px;top:${_sundial.y}px;width:${_sundial.w}px;height:${_sundial.h}px;` +
+        `display:block;padding:0;border:none;background:none;pointer-events:auto;cursor:inherit;`,
+      imgStyle: `width:100%;height:100%;object-fit:contain;pointer-events:none;opacity:0.9;`,
+      onClick: () => this._enterDeepZoom(),
     } : null;
 
     // Ghost tiles: purely-CSS animation (see @keyframes ghostCycle) driven
@@ -3612,23 +3632,6 @@ class Component extends DCLogic {
     const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${chromeInkFaint};background:${chromeBg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
     const compassBtnStyle = `position:fixed;bottom:24px;left:24px;z-index:70;width:38px;height:38px;background:none;border:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;`;
     const goCenter = () => this._glideHome();
-    // ?debug=1 HUD (see componentDidMount) — reads _gesture/_pointers/
-    // _debugDistDelta/_debugMidDelta directly rather than mirroring them
-    // into state: every path that changes them already calls setState in
-    // the same handler, so they're always fresh by the time this renders.
-    // Zero extra renders, on or off. distDelta/midDelta are what
-    // PINCH_ACTIVATE_* (see its own comment) actually compares against —
-    // this is the readout for tuning that threshold on a real device.
-    const debugOn = this._debug;
-    const debugHudWrapStyle = `position:fixed;top:8px;left:8px;z-index:100;background:rgba(0,0,0,0.72);padding:6px 9px;pointer-events:none;display:flex;flex-direction:column;gap:2px;`;
-    const debugRowStyle = `font-family:'Space Mono',monospace;font-size:10px;color:#0f0;white-space:pre;`;
-    const debugCamX = `camera.x     ${this.state.camX.toFixed(1)}`;
-    const debugCamY = `camera.y     ${this.state.camY.toFixed(1)}`;
-    const debugZoom = `camera.zoom  ${this.state.zoom.toFixed(3)}`;
-    const debugGestureLabel = `gesture      ${this._gesture}`;
-    const debugPointerCount = `pointers     ${this._pointers.size}`;
-    const debugDistDelta = `distDelta    ${this._debugDistDelta.toFixed(1)}px`;
-    const debugMidDelta = `midDelta     ${this._debugMidDelta.toFixed(1)}px`;
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
     const closeSearch = () => this.setState({ searchOpen: false });
     const stop = (e) => e.stopPropagation();
@@ -3892,12 +3895,10 @@ class Component extends DCLogic {
       signBoxStyle,
       signLabelRightStyle, signLabelLeftStyle, signLabelDownStyle, signLabelUpStyle,
       goEdito, goDocu, goPoesie, goManifeste,
-      editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, ghostItems,
+      editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, sundialItem, ghostItems,
       navStyle, brandStyle, contactStyle, contactLabel, copyEmail: this.copyEmail, grainStyle,
       chromeInk,
       searchBtnStyle, compassBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
-      debugOn, debugHudWrapStyle, debugRowStyle, debugCamX, debugCamY, debugZoom, debugGestureLabel, debugPointerCount,
-      debugDistDelta, debugMidDelta,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
       previewSrc, previewImgStyle,
