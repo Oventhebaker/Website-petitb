@@ -1,0 +1,7 @@
+# Cloudflare Pages: serve the SPA shell for per-project deep links.
+# The site is a single index.html with no server-side routing, so any
+# /projets/<slug> URL (shared link, bookmark, reload while a project is
+# open) must return index.html with a 200 — the client-side JS then reads
+# the path and opens the matching project. Everything else (/, assets,
+# images) is served normally by Pages' static handler.
+/projets/*  /index.html  200

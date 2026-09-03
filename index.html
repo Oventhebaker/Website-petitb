@@ -2,6 +2,14 @@
 <html>
 <head>
 <meta charset="utf-8">
+<!-- Deep links like /projets/e-001 are served this same index.html (see
+     _redirects). Without a <base>, the browser would resolve every
+     relative URL on the page (./support.js, ./image-slot.js, images/…)
+     against /projets/ and 404. Pinning the base to the site root keeps
+     one static file working at any path. Must come before the first
+     relative <script> below so that script itself resolves correctly. -->
+<base href="/">
+<title>Petit Bouquetin</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 </head>
@@ -702,6 +710,25 @@ const W = 6000, H = 6000, CY = 3000;
 // meant to visually track the cross itself (the cadran dial — see DECOR)
 // is shifted by this same delta to stay put relative to it.
 const CX = 2848.82;
+
+// ---- Per-project URL routing -------------------------------------------
+// Each E/D/P/M project detail view gets its own shareable path,
+// petitbouquetin.fr/projets/<slug>, kept in sync with `state.detail`
+// via the History API (see _syncRoute / _handleRoute in the component).
+// Slug = the project's own pcode, lowercased with a dash: E001 -> e-001.
+// Deliberately scoped to project galleries only — the deep-zoom
+// constellation and the nested easter eggs (genèse du canvas, logo
+// prototypes) stay URL-less by design.
+const SITE_TITLE = 'Petit Bouquetin';
+const PROJECT_ROUTE_RE = /^\/projets\/([a-z])-0*(\d{1,3})\/?$/i;
+const slugForPcode = (pcode) => pcode.charAt(0).toLowerCase() + '-' + pcode.slice(1);
+// '/projets/e-001' -> 'E001' (or null if the path isn't a project route)
+const pcodeFromPath = (path) => {
+  const m = PROJECT_ROUTE_RE.exec(path || '');
+  return m ? m[1].toUpperCase() + String(m[2]).padStart(3, '0') : null;
+};
+const normPath = (p) => (p || '/').replace(/\/+$/, '') || '/';
+
 // Wheel-zoom speed, split by input device (see handleWheel + _classifyWheel).
 // The web platform gives no reliable mouse-vs-trackpad signal on a wheel
 // event, so this is heuristic: mouse notches arrive as a run of large,
@@ -1232,6 +1259,82 @@ class Component extends DCLogic {
     }, { rootMargin: '256px' });
     requestAnimationFrame(() => this._observeAnimated());
     if (new URLSearchParams(location.search).has('inputprobe')) this._startInputProbe();
+
+    // ---- Per-project URL routing --------------------------------------
+    // Browser back/forward: re-derive the open project (or the canvas)
+    // from whatever path the browser just restored. _handleRoute only
+    // setState()s — it never itself calls pushState — and _syncRoute
+    // (in componentDidUpdate) sees the URL already matches, so no extra
+    // history entry is created from a popstate.
+    this._onPopState = () => this._handleRoute(location.pathname);
+    window.addEventListener('popstate', this._onPopState);
+    // Deep link on a fresh load: if the path names a real project, open
+    // its detail view straight away (the overlay covers the canvas, so
+    // there's no nav animation to sit through) and canonicalise the URL
+    // in place. An unknown /projets/… slug falls back to the home canvas.
+    const bootPcode = pcodeFromPath(location.pathname);
+    if (bootPcode) {
+      const p = this.ALL().find((x) => x.pcode === bootPcode);
+      if (p) {
+        try { history.replaceState({ pcode: p.pcode }, '', '/projets/' + slugForPcode(p.pcode)); } catch (e) {}
+        this._lastRoutedKey = p.pcode; // pre-seed so _syncRoute stays a no-op
+        document.title = p.code + ' — ' + SITE_TITLE;
+        this.setState(this._detailStateFor(p));
+      } else {
+        try { history.replaceState(null, '', '/'); } catch (e) {}
+      }
+    } else if (normPath(location.pathname) !== '/') {
+      // Some other non-root path slipped through the redirect — normalise.
+      try { history.replaceState(null, '', '/'); } catch (e) {}
+    }
+  }
+
+  // Resolve a path to the matching project (E/D/P/M pcode) or null.
+  _projectFromPath(path) {
+    const pc = pcodeFromPath(path);
+    return pc ? (this.ALL().find((x) => x.pcode === pc) || null) : null;
+  }
+
+  // The project whose detail view is currently open, or null.
+  _currentDetailProject() {
+    if (!this.state.detail) return null;
+    return this.ALL().filter((p) => p.cat === this.state.detail)[this.state.detailIdx] || null;
+  }
+
+  // The setState payload that opens `p`'s detail view — same shape used
+  // by the canvas card click (openDetail) and the search result jump.
+  _detailStateFor(p) {
+    const inCat = this.ALL().filter((x) => x.cat === p.cat);
+    return { detail: p.cat, detailIdx: inCat.findIndex((x) => x.pcode === p.pcode), detailActiveIdx: 0 };
+  }
+
+  // Drive component state FROM the URL (initial deep link + popstate).
+  _handleRoute(path) {
+    const p = this._projectFromPath(path);
+    if (p) {
+      if (this._currentDetailProject() !== p) this.setState(this._detailStateFor(p));
+    } else {
+      // Back to the canvas — also drop the genesis easter-egg overlay if
+      // it happened to be stacked on top of a project view.
+      if (this.state.detail || this.state.genesisOpen) this.setState({ detail: null, genesisOpen: false });
+      if (normPath(path) !== '/') { try { history.replaceState(null, '', '/'); } catch (e) {} }
+    }
+  }
+
+  // Drive the URL + tab title FROM component state. Called on every
+  // update; only acts when the open project actually changed. Pushes a
+  // new history entry for an in-app open/close (so Back returns to the
+  // previous view), but stays silent when the URL already matches —
+  // which is the case right after a popstate or the deep-link boot.
+  _syncRoute() {
+    const p = this._currentDetailProject();
+    const key = p ? p.pcode : '';
+    if (key === this._lastRoutedKey) return;
+    this._lastRoutedKey = key;
+    document.title = p ? (p.code + ' — ' + SITE_TITLE) : SITE_TITLE;
+    const want = p ? ('/projets/' + slugForPcode(p.pcode)) : '/';
+    if (normPath(location.pathname) === normPath(want)) return;
+    try { history.pushState({ pcode: key || null }, '', want); } catch (e) {}
   }
   // TEMP (?inputprobe) — instruments real wheel + GestureEvent input and
   // runs a synthetic momentum-overshoot / clamp check, POSTing to a local
@@ -1382,6 +1485,7 @@ class Component extends DCLogic {
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('contextmenu', this._onContextMenu);
     window.removeEventListener('dragstart', this._onDragStart);
+    if (this._onPopState) window.removeEventListener('popstate', this._onPopState);
     clearTimeout(this._copiedTimer);
     clearTimeout(this._wheelEndTimer);
     clearTimeout(this._wheelGestureTimer);
@@ -1423,6 +1527,10 @@ class Component extends DCLogic {
       this._observeAnimated();
       if (deepNow) this._startOrbit(); else this._stopOrbit();
     }
+    // Keep the URL + tab title in step with whichever project (if any)
+    // is open. Single choke point for every open path — canvas card,
+    // search result, "← Retour", and browser back/forward.
+    this._syncRoute();
   }
 
   // ---- Momentum -------------------------------------------------------
