@@ -9,7 +9,9 @@
      one static file working at any path. Must come before the first
      relative <script> below so that script itself resolves correctly. -->
 <base href="/">
-<title>Petit Bouquetin</title>
+<title>Petit Bouquetin — Studio de direction artistique, Paris</title>
+<meta name="description" content="Portfolio de Léonard Videt, directeur artistique et photographe. Éditorial, documentaire, direction créative.">
+<link rel="icon" type="image/png" href="images/miscellaneous/flavicon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
 </head>
@@ -379,26 +381,26 @@
          top of it, never the other way around (see tileScale's
          hover-magnify growth, which now relies on this order). -->
     <sc-for list="{{decorItems}}" as="d" hint-placeholder-count="6">
-      <img src="{{d.src}}" style="{{d.style}}"></img>
+      <img src="{{d.src}}" style="{{d.style}}" alt="" loading="lazy"></img>
     </sc-for>
 
     <!-- The one clickable curio — looks like decor, links out to a Spotify
          playlist. See vinylItem in renderVals. -->
     <sc-if value="{{vinylItem}}" hint-placeholder-val="{{ false }}">
-      <a href="{{vinylItem.href}}" target="_blank" rel="noopener" style="{{vinylItem.wrapStyle}}"><img src="{{vinylItem.src}}" style="{{vinylItem.imgStyle}}"></img></a>
+      <a href="{{vinylItem.href}}" target="_blank" rel="noopener" style="{{vinylItem.wrapStyle}}"><img src="{{vinylItem.src}}" style="{{vinylItem.imgStyle}}" alt="" loading="lazy"></img></a>
     </sc-if>
 
     <!-- The sundial — sole entry point into the deep-zoom well. See
          sundialItem/_enterDeepZoom in renderVals. -->
     <sc-if value="{{sundialItem}}" hint-placeholder-val="{{ false }}">
-      <button style="{{sundialItem.wrapStyle}}" onClick="{{sundialItem.onClick}}"><img src="{{sundialItem.src}}" style="{{sundialItem.imgStyle}}"></img></button>
+      <button style="{{sundialItem.wrapStyle}}" onClick="{{sundialItem.onClick}}"><img src="{{sundialItem.src}}" style="{{sundialItem.imgStyle}}" alt="" loading="lazy"></img></button>
     </sc-if>
 
     <!-- Édito zone -->
     <sc-for list="{{editoItems}}" as="p" hint-placeholder-count="11">
       <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
         <div class="pb-mag-shadow" style="{{p.shadowStyle}}"></div>
-        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}"></image-slot></div>
+        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}" alt="{{p.alt}}"></image-slot></div>
         <div style="{{p.capStyle}}">
           <span style="{{p.codeStyle}}">{{ p.code }}</span>
           <span style="{{p.titleStyle}}">{{ p.title }}</span>
@@ -410,7 +412,7 @@
     <sc-for list="{{docuItems}}" as="p" hint-placeholder-count="5">
       <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
         <div class="pb-mag-shadow" style="{{p.shadowStyle}}"></div>
-        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}"></image-slot></div>
+        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}" alt="{{p.alt}}"></image-slot></div>
         <div style="{{p.capStyle}}">
           <span style="{{p.codeStyle}}">{{ p.code }}</span>
           <span style="{{p.titleStyle}}">{{ p.title }}</span>
@@ -422,7 +424,7 @@
     <sc-for list="{{poesieItems}}" as="p" hint-placeholder-count="2">
       <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
         <div class="pb-mag-shadow" style="{{p.shadowStyle}}"></div>
-        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}"></image-slot></div>
+        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}" alt="{{p.alt}}"></image-slot></div>
         <div style="{{p.capStyle}}">
           <span style="{{p.codeStyle}}">{{ p.code }}</span>
           <span style="{{p.titleStyle}}">{{ p.title }}</span>
@@ -434,7 +436,7 @@
     <sc-for list="{{manifesteItems}}" as="p" hint-placeholder-count="4">
       <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
         <div class="pb-mag-shadow" style="{{p.shadowStyle}}"></div>
-        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}"></image-slot></div>
+        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="contain" placeholder="{{p.ph}}" src="{{p.src}}" alt="{{p.alt}}"></image-slot></div>
         <div style="{{p.capStyle}}">
           <span style="{{p.codeStyle}}">{{ p.code }}</span>
           <span style="{{p.titleStyle}}">{{ p.title }}</span>
@@ -615,7 +617,7 @@
         </div>
         <div style="{{newsletterBtnRowStyle}}">
           <a href="{{newsletterLinkedinHref}}" target="_blank" rel="noopener noreferrer" style="{{newsletterBtnStyle}}">S’abonner sur LinkedIn</a>
-          <div style="{{newsletterBtnDisabledStyle}}">S’abonner par mail (me soutient plus)<span style="{{newsletterWipStyle}}">(wip)</span></div>
+          <a href="{{newsletterSubstackHref}}" target="_blank" rel="noopener noreferrer" style="{{newsletterBtnStyle}}">S’abonner par mail (me soutient plus)</a>
         </div>
       </div>
     </div>
@@ -719,7 +721,12 @@ const CX = 2848.82;
 // Deliberately scoped to project galleries only — the deep-zoom
 // constellation and the nested easter eggs (genèse du canvas, logo
 // prototypes) stay URL-less by design.
-const SITE_TITLE = 'Petit Bouquetin';
+// Short brand name (per-project tab titles, alt text) vs. the longer SEO
+// title (the <title> tag itself, and what the tab reverts to on the
+// canvas) — kept as two constants so lengthening one for search/link
+// previews doesn't also bloat "E·001 — …" down to unreadable.
+const SITE_NAME = 'Petit Bouquetin';
+const SITE_TITLE = 'Petit Bouquetin — Studio de direction artistique, Paris';
 const PROJECT_ROUTE_RE = /^\/projets\/([a-z])-0*(\d{1,3})\/?$/i;
 const slugForPcode = (pcode) => pcode.charAt(0).toLowerCase() + '-' + pcode.slice(1);
 // '/projets/e-001' -> 'E001' (or null if the path isn't a project route)
@@ -1278,7 +1285,7 @@ class Component extends DCLogic {
       if (p) {
         try { history.replaceState({ pcode: p.pcode }, '', '/projets/' + slugForPcode(p.pcode)); } catch (e) {}
         this._lastRoutedKey = p.pcode; // pre-seed so _syncRoute stays a no-op
-        document.title = p.code + ' — ' + SITE_TITLE;
+        document.title = p.code + ' — ' + SITE_NAME;
         this.setState(this._detailStateFor(p));
       } else {
         try { history.replaceState(null, '', '/'); } catch (e) {}
@@ -1331,7 +1338,7 @@ class Component extends DCLogic {
     const key = p ? p.pcode : '';
     if (key === this._lastRoutedKey) return;
     this._lastRoutedKey = key;
-    document.title = p ? (p.code + ' — ' + SITE_TITLE) : SITE_TITLE;
+    document.title = p ? (p.code + ' — ' + SITE_NAME) : SITE_TITLE;
     const want = p ? ('/projets/' + slugForPcode(p.pcode)) : '/';
     if (normPath(location.pathname) === normPath(want)) return;
     try { history.pushState({ pcode: key || null }, '', want); } catch (e) {}
@@ -3534,6 +3541,7 @@ class Component extends DCLogic {
       return {
         code: p.code, title: p.title, src: p.src,
         slot: 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
+        alt: p.title + ' — ' + SITE_NAME,
         open: openDetail(p),
         wrapStyle: `position:absolute;left:${p.x}px;top:${p.y}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition};${magTransform}`,
         shadowStyle,
@@ -3842,16 +3850,13 @@ class Component extends DCLogic {
     // detailCloseStyle/detailCapStyle/detailCodeStyle/detailTitleStyle
     // verbatim (same outer chrome, same code+title caption typography as
     // every standard project) but swaps the gallery+intentions grid for
-    // exactly two subscribe options, per the brief. The LinkedIn one is a
-    // real link (opens in a new tab — leaving the canvas via an external
-    // follow link shouldn't also lose the user's place on it); the email
-    // one is a plain inert div, deliberately not an <a>, so there's
-    // nothing to click while it's still "(wip)".
+    // exactly two subscribe options, per the brief. Both are real links
+    // (LinkedIn, and the Substack newsletter) that open in a new tab —
+    // leaving the canvas via an external follow link shouldn't also lose
+    // the user's place on it.
     const newsletterColStyle = `max-width:480px;margin:60px auto 0;display:flex;flex-direction:column;align-items:center;`;
     const newsletterBtnRowStyle = `display:flex;flex-direction:column;gap:22px;margin-top:36px;width:100%;align-items:center;`;
     const newsletterBtnStyle = `font-family:'Courier Prime',monospace;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:${ink};border-bottom:1px solid ${ink};padding-bottom:3px;cursor:pointer;`;
-    const newsletterBtnDisabledStyle = `font-family:'Courier Prime',monospace;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};border-bottom:1px solid ${inkFaint};padding-bottom:3px;opacity:0.55;cursor:default;`;
-    const newsletterWipStyle = `font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.08em;color:${inkFaint};margin-left:8px;text-transform:none;`;
 
     const manifestoOverlayStyle = `position:fixed;inset:0;z-index:90;background:${bg};overflow-y:auto;`;
     const manifestoColStyle = `max-width:900px;margin:0 auto;padding:120px 32px 140px;display:flex;flex-direction:column;`;
@@ -4037,8 +4042,9 @@ class Component extends DCLogic {
       detailIntentionsStyle, detailIntentionsParas,
       detailPh: dItem ? dItem.code + ' — ' + dItem.title : '',
       detailCode: dItem ? dItem.code : '', detailTitle: dItem ? dItem.title : '',
-      newsletterColStyle, newsletterBtnRowStyle, newsletterBtnStyle, newsletterBtnDisabledStyle, newsletterWipStyle,
+      newsletterColStyle, newsletterBtnRowStyle, newsletterBtnStyle,
       newsletterLinkedinHref: 'https://www.linkedin.com/build-relation/newsletter-follow?entityUrn=7470116843370811392',
+      newsletterSubstackHref: 'https://leonardvdt.substack.com/',
     };
   }
 }

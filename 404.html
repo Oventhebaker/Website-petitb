@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page introuvable — Petit Bouquetin</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/images/miscellaneous/flavicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #000000;
+    color: rgba(205,221,240,0.88);
+    font-family: 'Courier Prime', monospace;
+  }
+  body {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 28px; min-height: 100vh; padding: 32px; box-sizing: border-box; text-align: center;
+  }
+  .cross { color: rgba(205,221,240,0.6); }
+  .cross line { vector-effect: non-scaling-stroke; }
+  .message {
+    font-size: 16px; line-height: 1.6; margin: 0;
+    color: rgba(205,221,240,0.88);
+  }
+  a.home {
+    font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: rgba(205,221,240,0.7); text-decoration: none;
+    border-bottom: 1px solid rgba(205,221,240,0.4); padding-bottom: 3px;
+  }
+  a.home:hover { color: rgba(205,221,240,0.95); border-bottom-color: rgba(205,221,240,0.7); }
+</style>
+</head>
+<body>
+  <svg class="cross" width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
+    <line x1="4" y1="66" x2="128" y2="66" stroke="currentColor" stroke-width="1"></line>
+    <line x1="66" y1="4" x2="66" y2="128" stroke="currentColor" stroke-width="1"></line>
+  </svg>
+  <p class="message">Cette page n’existe pas.</p>
+  <a class="home" href="/">← Retour à l’accueil</a>
+</body>
+</html>

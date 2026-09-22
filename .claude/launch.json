@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "static-site",
+      "name": "petit-bouquetin",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8842"],
-      "port": 8842
+      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "/Users/leonard/Website-petitb"],
+      "port": 8080
     }
   ]
 }
