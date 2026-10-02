@@ -4,7 +4,10 @@
     {
       "name": "petit-bouquetin",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8080", "--directory", "/Users/leonard/Website-petitb"],
+      "runtimeArgs": [
+        "/Users/leonard/Website-petitb/.claude/preview-server.py",
+        "8080"
+      ],
       "port": 8080
     }
   ]

@@ -214,12 +214,6 @@
     </div>
   </sc-if>
 
-  <!-- ============= WRAP-SEAM MASK (masks the canvas wrap/teleport) =====
-       One fixed white layer over the world; its opacity is a pure
-       per-frame function of how close the display position sits to a
-       world seam — see wrapMask/flashStyle in renderVals. -->
-  <div style="{{flashStyle}}"></div>
-
   <!-- ============= COMPASS (return to center) ============= -->
   <button onClick="{{goCenter}}" style="{{compassBtnStyle}}">
     <svg width="30" height="30" viewBox="0 0 40 40" style="display:block;">
@@ -598,6 +592,7 @@ const GALLERY = {
   'janine': ['images/janine/Still%202025-04-19%20021407_1.65.1_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_1.65.2_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_1.69.1_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_1.69.2_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_2.33.1_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_2.4.1_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_2.5.1_2560x1440.webp', 'images/janine/Still%202025-04-19%20021407_2.5.2_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.1_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.2_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.3_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.4_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.5_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.6_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.7_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.8_2560x1440.webp', 'images/janine/Still%202025-04-30%20012951_2.41.9_2560x1440.webp', 'images/janine/Still%202025-04-30%20014810_2.41.6_2560x1440.webp', 'images/janine/Still%202025-04-30%20015052_2.42.1_2560x1440.webp', 'images/janine/Still%202025-05-14%20120959_2.41.11_2560x1440.webp', 'images/janine/Still%202025-05-14%20121129_1.39.1_2560x1440.webp', 'images/janine/Still%202025-05-14%20121155_1.39.2_2560x1440.webp', 'images/janine/Still%202025-05-14%20121203_1.39.1_2560x1440.webp', 'images/janine/expo_2560x1440.webp'],
   'design-2000s': ['images/design-2000s/0be99b8c-c4db-434d-915d-1e1f82f9abad_rw_1920_1920x1762.webp', 'images/design-2000s/199a3745-4f68-48ca-a332-93fb483538ce_rw_1920_1710x2560.webp', 'images/design-2000s/21b3a6ea-0bde-408f-b391-b72708fc6eb9_rw_1920_1920x1080.webp', 'images/design-2000s/236230df-bf74-48dd-a406-21014cc1559c_rw_1920_1920x1080.webp', 'images/design-2000s/2fcb1300-888a-4371-b55c-ee6d6bf20317_rw_1920_1710x2560.webp', 'images/design-2000s/466f4837-dce2-4f31-8c1c-eada24ffe771_1472x618.webp', 'images/design-2000s/722c08d6-0a5e-4c35-ac26-f2873d1aa5b4_rw_1920_1728x2560.webp', 'images/design-2000s/80%27sroom2_2560x1440.webp', 'images/design-2000s/80%27sroom_2560x1440.webp', 'images/design-2000s/835ff27d-4bca-4790-a5e2-c70e2e7d0e54_rw_1920_1844x1381.webp', 'images/design-2000s/8f81b7b6-50d9-46b0-8097-51f253297c01_rw_1920_1920x1080.webp', 'images/design-2000s/a402f96e-efbd-4386-b4c0-fe0c6378762b_rw_1920_1710x2560.webp', 'images/design-2000s/allframe_2560x1440.webp', 'images/design-2000s/c259346f-7aec-4ea9-9ef2-0dd0b4576278_rw_1920_1600x1600.webp', 'images/design-2000s/e81fa028-73b2-43eb-8d42-e0415381886b_810x1200.webp', 'images/design-2000s/frame_1920x1080.webp', 'images/design-2000s/windows%20windows%20xp%201_605x450.webp'],
   'lactee': ['images/lactee/RAWCUT.00_00_00_13.Still001_1920x1080.webp', 'images/lactee/RAWCUT.00_00_09_11.Still002_1920x1080.webp', 'images/lactee/RAWCUT.00_00_23_02.Still006_1920x1080.webp', 'images/lactee/RAWCUT.00_01_20_26.Still004_1920x1080.webp', 'images/lactee/RAWCUT.00_01_47_03.Still005_1920x1080.webp'],
+  'paris-greeters': ['images/paris-greeters/IMG_4646_810x1080.webp', 'images/paris-greeters/IMG_4672_810x1080.webp', 'images/paris-greeters/IMG_4680_810x1080.webp', 'images/paris-greeters/IMG_4690_810x1080.webp', 'images/paris-greeters/IMG_4717_810x1080.webp', 'images/paris-greeters/IMG_4721_810x1080.webp'],
   'floating%20shoes': ['images/floating%20shoes/DSC01989-2_2560x1922.webp', 'images/floating%20shoes/DSC01992_2560x1707.webp', 'images/floating%20shoes/DSC02014_2560x1922.webp', 'images/floating%20shoes/DSC02019_2560x1922.webp', 'images/floating%20shoes/DSC02043-2_2560x1922.webp'],
   'fleurs': ['images/fleurs/DSC00087_2560x1441.webp', 'images/fleurs/DSC00089_2560x1441.webp', 'images/fleurs/DSC00092_2560x1441.webp', 'images/fleurs/DSC00099_2560x1441.webp', 'images/fleurs/DSC00100_2560x1441.webp', 'images/fleurs/DSC00103_2560x1441.webp', 'images/fleurs/DSC00108_2560x1441.webp', 'images/fleurs/DSC09605_2560x1441.webp', 'images/fleurs/DSC09636_2560x1441.webp', 'images/fleurs/DSC09643_2560x1441.webp', 'images/fleurs/DSC09655_2560x1441.webp', 'images/fleurs/DSC09661_2560x1441.webp', 'images/fleurs/DSC09670_2560x1441.webp', 'images/fleurs/DSC09684_2560x1441.webp', 'images/fleurs/DSC09687_2560x1441.webp'],
   'jardin-continuite': ['images/jardin%20continuite/6_1920x1081.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.10_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.11_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.12_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.13_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.14_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.15_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.16_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.17_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.18_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.19_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.21_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.22_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.9_1920x1080.jpg'],
@@ -1060,7 +1055,6 @@ class Component extends DCLogic {
     clearTimeout(this._wheelGestureTimer);
     this._stopMomentum();
     this._cancelGlideHome();
-    if (this._maskRaf) { cancelAnimationFrame(this._maskRaf); this._maskRaf = null; }
   }
 
   componentDidUpdate(prevProps) {
@@ -2215,6 +2209,16 @@ class Component extends DCLogic {
           'C’est un film qui ne cherche pas à convaincre. Il montre une personne qui a déjà décidé, et qui porte cette décision avec autant de calme que n’importe quel autre geste du quotidien. On n’a rien eu besoin d’inventer pour que ce soit vrai. Il a juste fallu rester assez longtemps dans la conversation pour voir ce qui était déjà là.',
           ],
         },
+      { title: 'Atelier Paris Greeters', late: true,
+          src: 'images/paris-greeters/COVER.webp', gallery: GALLERY['paris-greeters'],
+          credits: 'Crédits : Animation : Léonard Videt, Petit Bouquetin — Mission : Paris Greeters',
+          intentionsParas: [
+          'Comment apprendre à des bénévoles à filmer ce qu’ils vivent déjà',
+          'On a passé un après-midi avec les bénévoles de Paris Greeters, dont le travail consiste à faire découvrir leur ville aux visiteurs qui la croisent sans la voir. Leur demander de filmer semblait à l’envers de tout ce qu’ils savent déjà faire, parler avec les mains, regarder dans les yeux, improviser une histoire sur un pont parce que quelqu’un a posé une question. L’idée n’était donc pas de leur apprendre une technique de montage, mais de les aider à reconnaître la voix qu’ils ont déjà en marchant, pour pouvoir la retrouver face à une caméra.',
+          'On a nommé quatre registres plutôt qu’une seule bonne manière de parler, poétique, rythme lent, mots choisis, observation attentive, humour, énergie haute, autodérision, passionné, conviction, gestes amples, partage de savoirs, intime, voix douce, proximité, comme une confidence à un ami. Chacun a reconnu le sien en nous écoutant les décrire, ce qui a changé la question posée. On ne demandait plus comment filmer une visite, on demandait comment filmer soi en train d’aimer une visite.',
+          'L’objectif derrière restait concret, aider Paris Greeters à réunir des vidéos de bénévoles assez vraies pour donner envie à d’autres de les rejoindre. Un recrutement qui passe par ce que chacun dit déjà sans y penser, plutôt que par un argumentaire tourné pour l’occasion.',
+          ],
+        },
     ];
 
     // `offCanvas`: kept in the data — searchable, openable, content intact — but
@@ -2369,57 +2373,40 @@ class Component extends DCLogic {
     // componentDidMount, which is still needed with this value.
     const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:none;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};`;
 
-    // ── Wrap-seam fade ────────────────────────────────────────────────
+    // ── Seamless wrap ─────────────────────────────────────────────────
     // The world is ONE 6000×6000 div positioned by dispX/dispY (camX/camY
-    // mod W/H), so its transform sawtooths a full W·zoom sideways the
-    // instant camX or camY crosses a multiple of W/H. Rather than try to
-    // make that discontinuity invisible (mirror-copying every near-seam
-    // card + decor was the previous attempt — reliable, but a lot of
-    // permanently-live duplicate nodes), just cover it with a short
-    // fixed-duration opacity dip on one full-viewport layer. Opacity is the
-    // single cheapest property to animate on every engine — compositor-only,
-    // no repaint, no layout — so this costs the same on WebKit as anywhere,
-    // and there is no continuous per-frame math or per-seam element.
-    //
-    // Trigger: a bucket-index change (Math.floor(camX/W) / (camY/H))
-    // detected HERE in renderVals — the same pass that positions the world,
-    // not componentDidUpdate which runs a frame too late. Bucket compare,
-    // not a dispX delta, so batched pan events that net back within W/2 in
-    // mod-space still register the crossing. On a change we stamp
-    // _seamFadeStart and drive opacity purely off the clock: 0→1 over
-    // SEAM_FADE_MS (fade out), then 1→0 over SEAM_FADE_MS (fade back). A
-    // short rAF pump keeps renders coming for the ~2·SEAM_FADE_MS the dip
-    // lasts, in case the pan itself stopped exactly on the crossing frame.
-    const SEAM_FADE_MS = 100;
-    let wrapMask = 0;
-    {
-      const bx = Math.floor(this.state.camX / W), by = Math.floor(this.state.camY / H);
-      if (this._seamBX != null && (bx !== this._seamBX || by !== this._seamBY)) {
-        this._seamFadeStart = performance.now();
-      }
-      this._seamBX = bx;
-      this._seamBY = by;
-      if (this._seamFadeStart != null) {
-        const elapsed = performance.now() - this._seamFadeStart;
-        if (elapsed < SEAM_FADE_MS) wrapMask = elapsed / SEAM_FADE_MS;
-        else if (elapsed < 2 * SEAM_FADE_MS) wrapMask = 1 - (elapsed - SEAM_FADE_MS) / SEAM_FADE_MS;
-        else { wrapMask = 0; this._seamFadeStart = null; }
-        if (this._seamFadeStart != null && !this._maskRaf) {
-          const step = () => {
-            this._maskRaf = null;
-            if (this._seamFadeStart != null) { this._maskRaf = requestAnimationFrame(step); this.forceUpdate(); }
-          };
-          this._maskRaf = requestAnimationFrame(step);
-        }
-      }
-    }
-    const flashStyle = `position:fixed;inset:0;z-index:96;pointer-events:none;background:${bg};opacity:${wrapMask.toFixed(3)};`;
+    // mod W/H), so its transform jumps a full W·zoom the instant camX or
+    // camY crosses a multiple of W/H. Instead of masking that jump, every
+    // piece is drawn at whichever copy of itself (its position ± W / ± H)
+    // sits nearest the camera: wrapAt() returns that offset. When the world
+    // jumps by W, the offset of every piece near the camera flips by −W in
+    // the same render, so on screen nothing moves at all — the canvas reads
+    // as one endless tiling, no flash, no snap.
+    // A piece only switches copy when it is exactly half a world (3000 px)
+    // from the camera, i.e. off screen on every normal viewport (the zoom
+    // floor shows at most ±CONTENT_HALF_W = 2570 px across). For very tall
+    // screens at the floor, where that point can come into view, the piece
+    // eases out over the last WRAP_FADE px before it switches and eases
+    // back in on the other side (`fade`, smoothstep) — never a pop.
+    const WRAP_FADE = 400;
+    const wrapAt = (cx, cy) => {
+      const ox = W * Math.round((dispX - cx) / W), oy = H * Math.round((dispY - cy) / H);
+      const near = Math.max(
+        Math.abs(cx + ox - dispX) - (W / 2 - WRAP_FADE),
+        Math.abs(cy + oy - dispY) - (H / 2 - WRAP_FADE), 0);
+      const t = 1 - Math.min(1, near / WRAP_FADE);
+      return { ox, oy, fade: t * t * (3 - 2 * t) };
+    };
+    // Opacity only when it actually differs from 1 (keeps idle pieces
+    // free of a needless stacking context).
+    const wrapOpacity = (w, base = 1) => (w.fade * base) >= 0.999 ? (base === 1 ? '' : `opacity:${base};`) : `opacity:${(w.fade * base).toFixed(3)};`;
 
     const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
 
     // Sign
     const armLen = 76;
-    const signBoxStyle = `position:absolute;left:${CX - 110}px;top:${CY - 110}px;width:220px;height:220px;`;
+    const signWrap = wrapAt(CX, CY);
+    const signBoxStyle = `position:absolute;left:${CX - 110 + signWrap.ox}px;top:${CY - 110 + signWrap.oy}px;width:220px;height:220px;` + wrapOpacity(signWrap);
     const labelBase = `position:absolute;font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:${ink};white-space:nowrap;`;
     const signLabelRightStyle = labelBase + `left:${110 + armLen + 10}px;top:104px;`;
     const signLabelLeftStyle = labelBase + `right:${110 + armLen + 10}px;top:104px;text-align:right;`;
@@ -2447,13 +2434,15 @@ class Component extends DCLogic {
     const axisX = CX;
     for (let k = -GRID_RANGE; k <= GRID_RANGE; k++) {
       if (k === 0) continue;
+      const wc = wrapAt(axisX + k * GRID_PX, CY);
       axisTicks.push({
         text: String(gridColNumber(k)),
-        style: axisBase + `left:${axisX + k * GRID_PX - 28}px;top:${CY}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;`,
+        style: axisBase + `left:${axisX + k * GRID_PX - 28 + wc.ox}px;top:${CY + wc.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wc),
       });
+      const wr = wrapAt(axisX, CY + k * GRID_PY);
       axisTicks.push({
         text: gridRowLetter(k),
-        style: axisBase + `left:${axisX - 28}px;top:${CY + k * GRID_PY}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;`,
+        style: axisBase + `left:${axisX - 28 + wr.ox}px;top:${CY + k * GRID_PY + wr.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wr),
       });
     }
 
@@ -2500,8 +2489,8 @@ class Component extends DCLogic {
     // changes nothing there — it only clamps in as you zoom out.
     const MAG_RADIUS_WORLD_CAP = 900;
     const MAG_RADIUS = Math.min(MAG_RADIUS_SCREEN, MAG_RADIUS_WORLD_CAP * zoom);
-    const tileScale = (p) => {
-      const worldDx = (p.x + p.w / 2) - dispX, worldDy = (p.y + p.h / 2) - dispY;
+    const tileScale = (p, wrap) => {
+      const worldDx = (p.x + wrap.ox + p.w / 2) - dispX, worldDy = (p.y + wrap.oy + p.h / 2) - dispY;
       const screenDist = Math.hypot(worldDx, worldDy) * zoom;
       const t = Math.max(0, Math.min(1, 1 - screenDist / MAG_RADIUS));
       const smooth = t * t * (3 - 2 * t); // smoothstep: progressive in, progressive out
@@ -2543,7 +2532,8 @@ class Component extends DCLogic {
     const goManifeste = (e) => { e.preventDefault(); this.navTo(nt.manifeste.x, nt.manifeste.y, fitZoom(nt.manifeste)); };
 
     const decorateGrid = (list) => list.map(p => {
-      const { scale, smooth } = tileScale(p);
+      const wrap = wrapAt(p.x + p.w / 2, p.y + p.h / 2);
+      const { scale, smooth } = tileScale(p, wrap);
       // Same transition as the world itself (see worldStyle above): 'none'
       // during a live drag/wheel (each event already setStates its own
       // exact target, no interpolation needed) and the 0.9s glide during
@@ -2571,11 +2561,11 @@ class Component extends DCLogic {
         slot: 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
         alt: p.title + ' — ' + SITE_NAME,
         open: openDetail(p),
-        wrapStyle: `position:absolute;left:${p.x}px;top:${p.y}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition};${magTransform}`,
+        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition};${magTransform}` + wrapOpacity(wrap),
         shadowStyle,
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
         capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
-        codeStyle: `font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;color:${ink};`,
+        codeStyle: `font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;color:${ink};white-space:nowrap;flex-shrink:0;`,
         titleStyle: `font-family:'Courier Prime',monospace;font-size:14px;font-weight:700;color:${inkFaint};`,
       };
     });
@@ -2591,12 +2581,15 @@ class Component extends DCLogic {
     // here and rendered as its own <a> element below instead. The sundial
     // (the compass dial at the cross) is just another image now, loaded
     // eagerly since it sits on the very first screen.
-    const decorItems = this._decor.filter((d) => !d.href).map((d) => ({
-      src: d.src,
-      loading: d.sundial ? 'eager' : 'lazy',
-      style: `position:absolute;left:${d.x}px;top:${d.y}px;width:${d.w}px;height:${d.h}px;` +
-        `object-fit:contain;pointer-events:none;opacity:0.9;`,
-    }));
+    const decorItems = this._decor.filter((d) => !d.href).map((d) => {
+      const w = wrapAt(d.x + d.w / 2, d.y + d.h / 2);
+      return {
+        src: d.src,
+        loading: d.sundial ? 'eager' : 'lazy',
+        style: `position:absolute;left:${d.x + w.ox}px;top:${d.y + w.oy}px;width:${d.w}px;height:${d.h}px;` +
+          `object-fit:contain;pointer-events:none;` + wrapOpacity(w, 0.9),
+      };
+    });
 
     // Text blocks (CANVAS_TEXTS) — plain text in the site's standard type
     // (Courier Prime, black on white, like the intentions and captions),
@@ -2611,10 +2604,10 @@ class Component extends DCLogic {
     // here, client-side, after that static scan, it is never seen.
     const contactMailHref = 'mailto:' + ['petitbouquetin.media', 'gmail.com'].join('@');
     const textBodyStyle = `font-family:'Courier Prime',monospace;font-size:13px;line-height:1.6;color:${ink};margin:0;white-space:pre-line;`;
-    const textItems = this._texts.map((t) => ({
+    const textItems = this._texts.map((t) => ({ t, w: wrapAt(t.x + t.w / 2, t.y + t.h / 2) })).map(({ t, w }) => ({
       text: t.text, sig: t.sig || '', link: t.link || '', after: t.after || '',
       href: t.link ? contactMailHref : '',
-      boxStyle: `position:absolute;left:${t.x}px;top:${t.y}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;`,
+      boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;` + wrapOpacity(w),
       bodyStyle: textBodyStyle,
       sigStyle: `font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
       linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:auto;cursor:pointer;`,
@@ -2630,9 +2623,10 @@ class Component extends DCLogic {
     // retargets the pointerup+click away from this <a> — so dragging across
     // it pans the canvas and never navigates; only a clean click does.
     const _vinyl = this._decor.find((d) => d.href);
+    const _vinylWrap = _vinyl ? wrapAt(_vinyl.x + _vinyl.w / 2, _vinyl.y + _vinyl.h / 2) : null;
     const vinylItem = _vinyl ? {
       href: _vinyl.href, src: _vinyl.src,
-      wrapStyle: `position:absolute;left:${_vinyl.x}px;top:${_vinyl.y}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
+      wrapStyle: wrapOpacity(_vinylWrap) + `position:absolute;left:${_vinyl.x + _vinylWrap.ox}px;top:${_vinyl.y + _vinylWrap.oy}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
         `display:block;pointer-events:auto;cursor:inherit;text-decoration:none;`,
       imgStyle: `width:100%;height:100%;object-fit:contain;pointer-events:none;opacity:0.9;`,
     } : null;
@@ -2949,7 +2943,6 @@ class Component extends DCLogic {
 
     return {
       appStyle, worldStyle, ink,
-      flashStyle,
       onDown: this.onDown, onMove: this.onMove, onUp: this.onUp, onCancel: this.onCancel,
       signBoxStyle,
       signLabelRightStyle, signLabelLeftStyle, signLabelDownStyle, signLabelUpStyle,
