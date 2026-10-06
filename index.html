@@ -2586,7 +2586,13 @@ class Component extends DCLogic {
     // property (touch-action:none alone never stopped it, before OR after
     // this) — that's the non-passive touchstart/touchmove listeners in
     // componentDidMount, which is still needed with this value.
-    const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:none;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};`;
+    // user-select: a drag on the canvas pans it, so nothing there should
+    // start a text selection (captions, axis marks, the cross's labels, the
+    // top bar) — the pointer used to get caught selecting text mid-pan. Back
+    // to normal as soon as a page, search or overlay is open, so its text
+    // can be selected and copied.
+    const textSelect = overlayOpen ? 'text' : 'none';
+    const appStyle = `position:fixed;inset:0;overflow:hidden;background:${bg};touch-action:none;cursor:${overlayOpen ? 'auto' : (this.state.dragging ? 'grabbing' : 'grab')};user-select:${textSelect};-webkit-user-select:${textSelect};`;
 
     // ── Seamless wrap ─────────────────────────────────────────────────
     // The world is ONE 6000×6000 div positioned by dispX/dispY (camX/camY
