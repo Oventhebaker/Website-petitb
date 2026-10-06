@@ -442,6 +442,12 @@ const pcodeFromPath = (path) => {
 // 1..GRID_RANGE either side of the cross (the axes themselves, k = 0 and
 // j = 0, hold no cells).
 const GRID_PX = 480, GRID_PY = 460, GRID_RANGE = 5;
+// Wrap period of the infinite canvas: exactly one grid's worth of columns /
+// rows (k = −RANGE…RANGE, axis included), NOT the 6000×6000 world box. The
+// first column of the next copy then lands one GRID_PX after the last column
+// of this one (and likewise one GRID_PY vertically), so the seam keeps the
+// same spacing as the rest of the grid instead of a ~1200 px empty band.
+const WRAP_W = (2 * GRID_RANGE + 1) * GRID_PX, WRAP_H = (2 * GRID_RANGE + 1) * GRID_PY;
 // Coordinates, continuous across the whole canvas (no restart at the centre):
 // columns numbered 1…10 from left to right, rows lettered A…J from bottom to
 // top. (k, j) is a cell's offset from the cross: k < 0 west, j < 0 north.
@@ -593,6 +599,7 @@ const GALLERY = {
   'design-2000s': ['images/design-2000s/0be99b8c-c4db-434d-915d-1e1f82f9abad_rw_1920_1920x1762.webp', 'images/design-2000s/199a3745-4f68-48ca-a332-93fb483538ce_rw_1920_1710x2560.webp', 'images/design-2000s/21b3a6ea-0bde-408f-b391-b72708fc6eb9_rw_1920_1920x1080.webp', 'images/design-2000s/236230df-bf74-48dd-a406-21014cc1559c_rw_1920_1920x1080.webp', 'images/design-2000s/2fcb1300-888a-4371-b55c-ee6d6bf20317_rw_1920_1710x2560.webp', 'images/design-2000s/466f4837-dce2-4f31-8c1c-eada24ffe771_1472x618.webp', 'images/design-2000s/722c08d6-0a5e-4c35-ac26-f2873d1aa5b4_rw_1920_1728x2560.webp', 'images/design-2000s/80%27sroom2_2560x1440.webp', 'images/design-2000s/80%27sroom_2560x1440.webp', 'images/design-2000s/835ff27d-4bca-4790-a5e2-c70e2e7d0e54_rw_1920_1844x1381.webp', 'images/design-2000s/8f81b7b6-50d9-46b0-8097-51f253297c01_rw_1920_1920x1080.webp', 'images/design-2000s/a402f96e-efbd-4386-b4c0-fe0c6378762b_rw_1920_1710x2560.webp', 'images/design-2000s/allframe_2560x1440.webp', 'images/design-2000s/c259346f-7aec-4ea9-9ef2-0dd0b4576278_rw_1920_1600x1600.webp', 'images/design-2000s/e81fa028-73b2-43eb-8d42-e0415381886b_810x1200.webp', 'images/design-2000s/frame_1920x1080.webp', 'images/design-2000s/windows%20windows%20xp%201_605x450.webp'],
   'lactee': ['images/lactee/RAWCUT.00_00_00_13.Still001_1920x1080.webp', 'images/lactee/RAWCUT.00_00_09_11.Still002_1920x1080.webp', 'images/lactee/RAWCUT.00_00_23_02.Still006_1920x1080.webp', 'images/lactee/RAWCUT.00_01_20_26.Still004_1920x1080.webp', 'images/lactee/RAWCUT.00_01_47_03.Still005_1920x1080.webp'],
   'paris-greeters': ['images/paris-greeters/IMG_4646_810x1080.webp', 'images/paris-greeters/IMG_4672_810x1080.webp', 'images/paris-greeters/IMG_4680_810x1080.webp', 'images/paris-greeters/IMG_4690_810x1080.webp', 'images/paris-greeters/IMG_4717_810x1080.webp', 'images/paris-greeters/IMG_4721_810x1080.webp'],
+  'ousman': ['images/Ousman/Laposte_ousman-01_1080x608.webp', 'images/Ousman/Laposte_ousman-02_1080x608.webp', 'images/Ousman/Laposte_ousman-03_1080x608.webp', 'images/Ousman/Laposte_ousman-04_608x1080.webp', 'images/Ousman/Laposte_ousman-05_1080x608.webp', 'images/Ousman/Laposte_ousman-06_1080x608.webp', 'images/Ousman/Laposte_ousman-07_1080x613.webp', 'images/Ousman/Laposte_ousman-08_1080x823.webp', 'images/Ousman/Laposte_ousman-09_1080x673.webp', 'images/Ousman/Laposte_ousman-10_1080x608.webp', 'images/Ousman/Laposte_ousman-11_608x1080.webp', 'images/Ousman/Laposte_ousman-12_1080x556.webp', 'images/Ousman/Laposte_ousman-13_1080x562.webp', 'images/Ousman/Laposte_ousman-14_608x1080.webp', 'images/Ousman/Laposte_ousman-15_608x1080.webp', 'images/Ousman/Laposte_ousman-16_1080x608.webp', 'images/Ousman/Laposte_ousman-17_1080x678.webp', 'images/Ousman/Laposte_ousman-18_656x1080.webp'],
   'floating%20shoes': ['images/floating%20shoes/DSC01989-2_2560x1922.webp', 'images/floating%20shoes/DSC01992_2560x1707.webp', 'images/floating%20shoes/DSC02014_2560x1922.webp', 'images/floating%20shoes/DSC02019_2560x1922.webp', 'images/floating%20shoes/DSC02043-2_2560x1922.webp'],
   'fleurs': ['images/fleurs/DSC00087_2560x1441.webp', 'images/fleurs/DSC00089_2560x1441.webp', 'images/fleurs/DSC00092_2560x1441.webp', 'images/fleurs/DSC00099_2560x1441.webp', 'images/fleurs/DSC00100_2560x1441.webp', 'images/fleurs/DSC00103_2560x1441.webp', 'images/fleurs/DSC00108_2560x1441.webp', 'images/fleurs/DSC09605_2560x1441.webp', 'images/fleurs/DSC09636_2560x1441.webp', 'images/fleurs/DSC09643_2560x1441.webp', 'images/fleurs/DSC09655_2560x1441.webp', 'images/fleurs/DSC09661_2560x1441.webp', 'images/fleurs/DSC09670_2560x1441.webp', 'images/fleurs/DSC09684_2560x1441.webp', 'images/fleurs/DSC09687_2560x1441.webp'],
   'jardin-continuite': ['images/jardin%20continuite/6_1920x1081.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.10_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.11_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.12_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.13_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.14_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.15_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.16_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.17_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.18_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.19_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.21_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.22_1920x1080.jpg', 'images/jardin%20continuite/Still%202026-04-28%20000101_1.1.9_1920x1080.jpg'],
@@ -1144,8 +1151,8 @@ class Component extends DCLogic {
     // Shortest wrap-aware target: the CX/CY-equivalent (CX + kW) nearest
     // the current camera, so a far-wrapped pan eases the short way home
     // instead of unwinding every wrap.
-    const xT = CX + Math.round((x0 - CX) / W) * W;
-    const yT = CY + Math.round((y0 - CY) / H) * H;
+    const xT = CX + Math.round((x0 - CX) / WRAP_W) * WRAP_W;
+    const yT = CY + Math.round((y0 - CY) / WRAP_H) * WRAP_H;
     const zT = this.homeZoom();
     if (x0 === xT && y0 === yT && Math.abs(z0 - zT) < 1e-3) return;
     const DUR = 960; // eased a touch slower than it first shipped — the compass felt hurried
@@ -2008,6 +2015,31 @@ class Component extends DCLogic {
       lateEls.push(e);
     });
 
+    // ---- pinned projects ----------------------------------------------
+    // A project with `cell: '7B'` (column number + row letter, as read off the
+    // axis marks) is moved onto that exact cell once everything else is
+    // placed — even outside its own wedge, the code still takes its zone
+    // letter (E-7B). Whatever already sits there (curio, text block, card)
+    // simply takes the pinned project's former cell in exchange, so nothing
+    // else on the canvas moves.
+    const cellAt = (code) => {
+      const m = /^(\d+)([A-J])$/.exec(code); if (!m) return null;
+      const col = +m[1], idx = m[2].charCodeAt(0) - 64;
+      const k = col <= RANGE ? col - RANGE - 1 : col - RANGE;
+      const j = idx <= RANGE ? RANGE - idx + 1 : RANGE - idx;
+      return cells.find((c) => c.k === k && c.j === j) || null;
+    };
+    for (const e of els) {
+      if (e.kind !== 'card' || !e.cell || !e.it.cell) continue;
+      const to = cellAt(e.it.cell);
+      if (!to) { console.warn('[gridLayout] no such cell', e.it.cell, 'for', e.it.title); continue; }
+      if (to === e.cell) continue;
+      const from = e.cell, other = to.owner;
+      from.owner = null; to.owner = null;
+      put(e, to);
+      if (other) put(other, from);
+    }
+
     const out = { zones: { edito: [], docu: [], poesie: [], manifeste: [] }, decor: [], texts: [] };
     for (const e of placed.concat(lateEls)) {
       if (e.kind === 'card') {
@@ -2041,7 +2073,7 @@ class Component extends DCLogic {
     // one). Items with no shoot yet (or an empty/missing folder) have no `src`
     // — image-slot falls back to its placeholder automatically.
     const editoRaw = [
-      { title: 'Marché Bastille', temp: 'cool', src: 'images/margaux/COVER.webp', gallery: GALLERY['margaux'],
+      { title: 'Marché Bastille', cell: '9E', temp: 'cool', src: 'images/margaux/COVER.webp', gallery: GALLERY['margaux'],
           credits: 'Crédits : Direction créative et photographie : Léonard Videt. Modèle : Margaux. Stylisme : vintage.',
           intentionsParas: [
           'Un marché a son propre langage, et on cesse de l’entendre à force de le croiser, le bleu et blanc du poissonnier, le rouge du boucher, les camions qui attendent en retrait pendant que tout le reste s’active autour, alors ce projet essaie de retourner voir ce langage-là comme on retournerait dans un souvenir d’enfance qu’on pensait connaître par cœur.',
@@ -2098,7 +2130,7 @@ class Component extends DCLogic {
           'Et parfois, le plus simple pour commencer, c’est d’appeler une amie.',
           ],
         },
-      { title: 'Miss Congo 2026', temp: 'warm', src: 'images/congo/COVER.webp', gallery: GALLERY['congo'],
+      { title: 'Miss Congo 2026', cell: '8C', temp: 'warm', src: 'images/congo/COVER.webp', gallery: GALLERY['congo'],
           credits: 'Crédits : Photographie : Léonard Videt. Robe : Salomé. Talent : Reine, Miss Congo 2026.',
           intentionsParas: [
           'Cet édito est né d’une envie de l’équipe de Reine, Miss Congo 2026, celle de mettre en lumière le travail de Salomé, créatrice de robes artisanales. Parmi toutes les pièces, le pourpre s’est imposé, cette couleur profonde qui porte à elle seule une partie de ce qu’on voulait raconter, l’histoire d’une femme africaine, une culture riche en couleurs et en motifs transmis depuis des générations.',
@@ -2151,6 +2183,16 @@ class Component extends DCLogic {
           intentionsParas: [
           'Même chêne, même vert qui vire au bleu mélancolique sous cette lumière-là, même direction artistique posée comme un territoire commun. Ce qui m’intéressait n’était pas de raconter une histoire, mais de regarder ce que deux acting font d’une scène identique. Le regard ne se pose pas de la même façon chez l’une et chez l’autre, une présence qui cherche l’objectif, une autre qui s’en détourne, et entre les deux, le parc reste inchangé, patient, presque indifférent à qui vient s’y tenir.',
           'Je crois que c’est ça qui m’a le plus marqué en revoyant les images. Le décor ne change jamais. C’est l’interprétation qui fait toute la différence.',
+          ],
+        },
+      // `late`: dropped into the emptiest free Édito cell once the rest of the
+      // layout is settled (see gridLayout), so no other piece moves.
+      { title: 'Courrier et Fonte', late: true, cell: '7B',
+          src: 'images/Ousman/COVER.webp', gallery: GALLERY['ousman'],
+          credits: 'Crédits : Direction artistique et photographie : Léonard Videt, Petit Bouquetin. Stylisme et modèle à compléter.',
+          intentionsParas: [
+          'Tout a commencé par quatre boîtes aux lettres croisées en passant près de Saint-Lazare, prises dans une fonte art déco couleur anthracite qu’on ne regarde plus vraiment une fois qu’on a grandi avec. En tournant autour du bâtiment, le jaune de la Poste s’est imposé comme la seule question qui comptait, ce que ce jaune-là pouvait raconter une fois sorti du courrier et posé dans un édito, porté par un visage plutôt que collé sur un camion.',
+          'Le portrait garde un geste documentaire, et l’ambiance ferroviaire autour, la pierre, les rails, le métal travaillé, installe un décor industriel que le bleu ciel vient compléter sans jamais l’adoucir, le bleu répond au jaune comme deux couleurs qui se cherchaient depuis le début. Rien n’a été ajouté qui n’était pas déjà là, et c’est cette économie de moyens qui donne à l’ensemble une attitude casual, presque futuriste, un mannequin qui pose avec ce que la rue lui offrait plutôt qu’avec ce qu’on avait prévu pour lui.',
           ],
         },
     ];
@@ -2340,8 +2382,8 @@ class Component extends DCLogic {
     const tileBg = '#EFECE4';
 
     const zoom = this.state.zoom;
-    const dispX = ((this.state.camX % W) + W) % W;
-    const dispY = ((this.state.camY % H) + H) % H;
+    const dispX = ((this.state.camX % WRAP_W) + WRAP_W) % WRAP_W;
+    const dispY = ((this.state.camY % WRAP_H) + WRAP_H) % WRAP_H;
     const transition = this.state.navigating ? 'transform 0.9s cubic-bezier(0.22,1,0.36,1)' : 'none';
 
     // cursor mirrors onDown's own bail-out condition exactly (detail/
@@ -2375,25 +2417,27 @@ class Component extends DCLogic {
 
     // ── Seamless wrap ─────────────────────────────────────────────────
     // The world is ONE 6000×6000 div positioned by dispX/dispY (camX/camY
-    // mod W/H), so its transform jumps a full W·zoom the instant camX or
-    // camY crosses a multiple of W/H. Instead of masking that jump, every
-    // piece is drawn at whichever copy of itself (its position ± W / ± H)
-    // sits nearest the camera: wrapAt() returns that offset. When the world
-    // jumps by W, the offset of every piece near the camera flips by −W in
-    // the same render, so on screen nothing moves at all — the canvas reads
-    // as one endless tiling, no flash, no snap.
-    // A piece only switches copy when it is exactly half a world (3000 px)
-    // from the camera, i.e. off screen on every normal viewport (the zoom
-    // floor shows at most ±CONTENT_HALF_W = 2570 px across). For very tall
-    // screens at the floor, where that point can come into view, the piece
-    // eases out over the last WRAP_FADE px before it switches and eases
-    // back in on the other side (`fade`, smoothstep) — never a pop.
-    const WRAP_FADE = 400;
+    // mod WRAP_W/WRAP_H — one grid's width/height, see WRAP_W), so its
+    // transform jumps a full period·zoom the instant camX or camY crosses a
+    // multiple of it. Instead of masking that jump, every piece is drawn at
+    // whichever copy of itself (its position ± WRAP_W / ± WRAP_H) sits
+    // nearest the camera: wrapAt() returns that offset. When the world jumps
+    // by a period, the offset of every piece near the camera flips by the
+    // opposite amount in the same render, so on screen nothing moves at all —
+    // the canvas reads as one endless tiling, no flash, no snap, and the
+    // seam keeps the grid's own pitch.
+    // A piece only switches copy when it is exactly half a period from the
+    // camera (2640 px across, 2530 px down). At the zoom floor the screen
+    // reaches ±CONTENT_HALF_W = 2570 px, so that switch can sit right at the
+    // edge of the view: the piece eases out over the last WRAP_FADE px before
+    // it switches and eases back in on the other side (`fade`, smoothstep) —
+    // a thin band at the very edge, never a pop.
+    const WRAP_FADE = 160;
     const wrapAt = (cx, cy) => {
-      const ox = W * Math.round((dispX - cx) / W), oy = H * Math.round((dispY - cy) / H);
+      const ox = WRAP_W * Math.round((dispX - cx) / WRAP_W), oy = WRAP_H * Math.round((dispY - cy) / WRAP_H);
       const near = Math.max(
-        Math.abs(cx + ox - dispX) - (W / 2 - WRAP_FADE),
-        Math.abs(cy + oy - dispY) - (H / 2 - WRAP_FADE), 0);
+        Math.abs(cx + ox - dispX) - (WRAP_W / 2 - WRAP_FADE),
+        Math.abs(cy + oy - dispY) - (WRAP_H / 2 - WRAP_FADE), 0);
       const t = 1 - Math.min(1, near / WRAP_FADE);
       return { ox, oy, fade: t * t * (3 - 2 * t) };
     };
