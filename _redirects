@@ -4,6 +4,9 @@
 # open) must return index.html with a 200 — the client-side JS then reads
 # the path and opens the matching project. Everything else (/, assets,
 # images) is served normally by Pages' static handler.
+# The target is "/" and NOT "/index.html": Pages' pretty URLs answer
+# /index.html with a 308 to /, and a 200 rewrite onto a redirect ends in
+# the 404 page (refreshing /projets/e-9e gave a 404 in October 2026).
 
 # Old sequential project URLs (/projets/e-001 …, until October 2026) → the
 # coordinate-based ones. Must stay ABOVE the catch-all below (first match
@@ -36,4 +39,4 @@
 /projets/m-002  /projets/m-newsletter  301
 # END legacy project slugs
 
-/projets/*  /index.html  200
+/projets/*  /  200
