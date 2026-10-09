@@ -171,6 +171,18 @@
        exactly (just the image box, not the caption below it — an `inset:0`
        here would stretch this to the whole tile <a>, caption included,
        since that's its nearest positioned ancestor). */
+    /* Opening sequence (see _startIntro): the sundial video sits above the
+       canvas and multiplies onto the white page, so its near-white
+       background vanishes and only the dial shows. Its opacity transition is
+       the video half of the cross-fade onto the real dial. */
+    .pb-intro-video {
+      position: fixed; z-index: 50; pointer-events: none;
+      mix-blend-mode: multiply; object-fit: contain; background: transparent;
+      transition: opacity 600ms ease;
+    }
+    /* Each canvas piece fades in from 0 to its own resting opacity (no "to"
+       frame), delayed by its distance from the cross — see introStyle. */
+    @keyframes pb-intro-in { from { opacity: 0; } }
     .pb-mag-shadow {
       position: absolute; pointer-events: none;
       box-shadow: 0 16px 36px rgba(0, 0, 0, 0.32);
@@ -530,6 +542,26 @@ const SITE_TITLE = 'Petit Bouquetin, studio créatif à Paris — éditorial, do
 const SITE_DESC = 'Petit Bouquetin est un studio créatif fondé à Paris par Léonard Videt : éditoriaux de mode, films documentaires, direction artistique et photographie.';
 const SITE_SHARE_IMAGE = SITE_URL + '/images/og/petit-bouquetin-share.jpg';
 const CAT_LABEL = { edito: 'Éditorial', docu: 'Documentaire', poesie: 'Poésie', manifeste: 'Manifeste' };
+// ── Opening sequence ────────────────────────────────────────────────────
+// Once per browser session, on the home page only: the sundial video plays
+// on white, lands exactly on the canvas's own dial, cross-fades into it, then
+// the pieces fade in in waves from the cross outwards. See _startIntro.
+const INTRO_SEEN_KEY = 'pb-intro-seen';
+const INTRO_VIDEO = 'video/landing-sundial.mp4';
+const INTRO_POSTER = 'video/landing-sundial-poster.webp';
+const INTRO_FADE_MS = 600;          // video -> real dial cross-fade
+const INTRO_WAVE_MS = 1400;         // spread of the waves, cross to rim
+const INTRO_PIECE_MS = 600;         // each piece's own fade
+const INTRO_FALLBACK_MS = 1000;     // poster shown this long when there's no video
+const INTRO_LOAD_TIMEOUT_MS = 1500; // video not playing by then -> poster
+const INTRO_CAP_MS = 5000;          // the video phase never lasts longer
+// The dial inside the video's 800×800 frame, measured on its last image
+// (the poster): 335 px wide, centred at (399, 400).
+const INTRO_DIAL = { frame: 800, w: 335, cx: 399, cy: 400 };
+const introWanted = () => {
+  if (normPath(location.pathname) !== '/') return false;  // deep link: straight to the page
+  try { return !sessionStorage.getItem(INTRO_SEEN_KEY); } catch (e) { return false; }
+};
 // ── Brand-name typography candidates ────────────────────────────────────
 // Only the "Petit Bouquetin" wordmark at the top left can use a different
 // face — Picaflor (self-hosted, see the @font-face in <head>), with
@@ -973,9 +1005,13 @@ class Component extends DCLogic {
     // Placeholder page opened from the top bar (Boutique, not built yet).
     soonPage: null,
     copied: false, hoverId: null, hoverSrc: null, hoverX: 0, hoverY: 0,
+    // Opening sequence: 'video' (pieces hidden, video playing), 'reveal'
+    // (cross-fade + waves), or null (normal site). See _startIntro.
+    intro: introWanted() ? 'video' : null,
   };
 
   componentDidMount() {
+    if (this.state.intro) this._startIntro();
     // Two-finger trackpad pan and Ctrl+wheel/pinch zoom both arrive as wheel
     // events. React's onWheel is attached passive, so preventDefault() there
     // is silently ignored and the browser's native page zoom/scroll fires
@@ -1234,7 +1270,109 @@ class Component extends DCLogic {
       });
     }, 1400);
   };
+  // ── Opening sequence ─────────────────────────────────────────────────
+  // Timeline: video plays (~3.9 s) -> 'reveal': the video fades out over
+  // INTRO_FADE_MS while the real dial fades in under it, then every piece
+  // fades in, delayed by its distance from the cross (INTRO_WAVE_MS spread)
+  // -> null. Any click, scroll, touch or key jumps straight to the end.
+  // Reduced motion, a video error, blocked autoplay or a slow load show the
+  // poster instead and move on after INTRO_FALLBACK_MS. The video phase is
+  // capped at INTRO_CAP_MS whatever happens; the canvas is usable from the
+  // moment the reveal starts. Each step leaves a performance mark
+  // (pb-intro-*) for timing checks.
+  _startIntro() {
+    try { sessionStorage.setItem(INTRO_SEEN_KEY, '1'); } catch (e) {}
+    performance.mark('pb-intro-start');
+    this._introReduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const v = document.createElement('video');
+    v.className = 'pb-intro-video';
+    v.muted = true; v.defaultMuted = true; v.playsInline = true;
+    v.setAttribute('muted', ''); v.setAttribute('playsinline', ''); v.setAttribute('aria-hidden', 'true');
+    v.preload = 'auto'; v.poster = INTRO_POSTER; v.disablePictureInPicture = true;
+    this._introVideo = v;
+    document.body.appendChild(v);
+    this._placeIntroVideo();
+    this._onIntroResize = () => this._placeIntroVideo();
+    window.addEventListener('resize', this._onIntroResize);
+
+    // Poster instead of the film, then on with the sequence.
+    const fallback = (why) => {
+      if (this._introFellBack || this.state.intro !== 'video') return;
+      this._introFellBack = why;
+      performance.mark('pb-intro-fallback');
+      clearTimeout(this._introLoadTimer);
+      try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} // back to the poster
+      this._introFallbackTimer = setTimeout(() => this._introReveal(), INTRO_FALLBACK_MS);
+    };
+    if (this._introReduced) fallback('reduced-motion');
+    else {
+      v.addEventListener('playing', () => { this._introPlaying = true; clearTimeout(this._introLoadTimer); performance.mark('pb-intro-playing'); }, { once: true });
+      v.addEventListener('ended', () => { performance.mark('pb-intro-ended'); this._introReveal(); }, { once: true });
+      v.addEventListener('error', () => fallback('error'), { once: true });
+      v.src = INTRO_VIDEO;
+      const played = v.play();
+      if (played && played.catch) played.catch(() => fallback('autoplay-blocked'));
+      this._introLoadTimer = setTimeout(() => { if (!this._introPlaying) fallback('load-timeout'); }, INTRO_LOAD_TIMEOUT_MS);
+    }
+    this._introCapTimer = setTimeout(() => { if (this.state.intro === 'video') { performance.mark('pb-intro-cap'); this._introReveal(); } }, INTRO_CAP_MS);
+
+    this._introSkip = () => { performance.mark('pb-intro-skip'); this._introFinish(); };
+    for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
+      window.addEventListener(type, this._introSkip, { capture: true, passive: true });
+    }
+  }
+
+  // Sizes and places the video so its last image's dial lands exactly on
+  // the canvas dial (the sundial <img>, already laid out under it).
+  _placeIntroVideo() {
+    const v = this._introVideo;
+    if (!v) return;
+    const dial = document.querySelector('[data-canvas-root] img[src*="cadran"]');
+    const r = dial && dial.getBoundingClientRect();
+    if (!r || !r.width) { requestAnimationFrame(() => this._placeIntroVideo()); return; }
+    // The dial fills its 290×285 image edge to edge (289 px wide) and the
+    // image is drawn width-limited (object-fit:contain), centred in its box.
+    const size = (r.width * 289 / 290) * INTRO_DIAL.frame / INTRO_DIAL.w;
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    Object.assign(v.style, {
+      width: size + 'px', height: size + 'px',
+      left: (cx - size * INTRO_DIAL.cx / INTRO_DIAL.frame) + 'px',
+      top: (cy - size * INTRO_DIAL.cy / INTRO_DIAL.frame) + 'px',
+    });
+  }
+
+  _introReveal() {
+    if (this.state.intro !== 'video') return;
+    performance.mark('pb-intro-reveal');
+    clearTimeout(this._introLoadTimer); clearTimeout(this._introCapTimer); clearTimeout(this._introFallbackTimer);
+    if (this._introVideo) this._introVideo.style.opacity = '0';
+    this.setState({ intro: 'reveal' });
+    const total = this._introReduced ? INTRO_FADE_MS : INTRO_FADE_MS + INTRO_WAVE_MS + INTRO_PIECE_MS;
+    this._introDoneTimer = setTimeout(() => this._introFinish(), total + 50);
+  }
+
+  _introFinish() {
+    if (!this.state.intro) return;
+    performance.mark('pb-intro-done');
+    this._introCleanup();
+    this.setState({ intro: null });
+  }
+
+  _introCleanup() {
+    clearTimeout(this._introLoadTimer); clearTimeout(this._introCapTimer);
+    clearTimeout(this._introFallbackTimer); clearTimeout(this._introDoneTimer);
+    if (this._introSkip) {
+      for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
+        window.removeEventListener(type, this._introSkip, { capture: true });
+      }
+      this._introSkip = null;
+    }
+    if (this._onIntroResize) { window.removeEventListener('resize', this._onIntroResize); this._onIntroResize = null; }
+    if (this._introVideo) { try { this._introVideo.pause(); } catch (e) {} this._introVideo.remove(); this._introVideo = null; }
+  }
+
   componentWillUnmount() {
+    this._introCleanup();
     window.removeEventListener('wheel', this._onWheel);
     if (this._canvasEl) {
       this._canvasEl.removeEventListener('touchstart', this._onTouchStart);
@@ -2638,13 +2776,25 @@ class Component extends DCLogic {
     // Opacity only when it actually differs from 1 (keeps idle pieces
     // free of a needless stacking context).
     const wrapOpacity = (w, base = 1) => (w.fade * base) >= 0.999 ? (base === 1 ? '' : `opacity:${base};`) : `opacity:${(w.fade * base).toFixed(3)};`;
+    // Opening sequence (see _startIntro). During the video every piece is
+    // hidden; during the reveal each fades in from 0 to its own opacity,
+    // delayed by its distance from the cross (waves outwards). The dial and
+    // the fixed UI ('dial') fade in with the cross-fade itself.
+    const intro = this.state.intro;
+    const introStyle = (x, y, kind) => {
+      if (!intro) return '';
+      if (intro === 'video') return 'opacity:0;';
+      if (kind === 'dial' || this._introReduced) return `animation:pb-intro-in ${INTRO_FADE_MS}ms ease both;`;
+      const d = Math.min(1, Math.hypot(x - CX, y - CY) / 3000);
+      return `animation:pb-intro-in ${INTRO_PIECE_MS}ms ease-out ${Math.round(INTRO_FADE_MS + d * INTRO_WAVE_MS)}ms both;`;
+    };
 
     const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
 
     // Sign
     const armLen = 76;
     const signWrap = wrapAt(CX, CY);
-    const signBoxStyle = `position:absolute;left:${CX - 110 + signWrap.ox}px;top:${CY - 110 + signWrap.oy}px;width:220px;height:220px;` + wrapOpacity(signWrap);
+    const signBoxStyle = `position:absolute;left:${CX - 110 + signWrap.ox}px;top:${CY - 110 + signWrap.oy}px;width:220px;height:220px;` + wrapOpacity(signWrap) + introStyle(CX + signWrap.ox, CY + signWrap.oy);
     const labelBase = `position:absolute;font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:${ink};white-space:nowrap;`;
     const signLabelRightStyle = labelBase + `left:${110 + armLen + 10}px;top:104px;`;
     const signLabelLeftStyle = labelBase + `right:${110 + armLen + 10}px;top:104px;text-align:right;`;
@@ -2675,12 +2825,12 @@ class Component extends DCLogic {
       const wc = wrapAt(axisX + k * GRID_PX, CY);
       axisTicks.push({
         text: String(gridColNumber(k)),
-        style: axisBase + `left:${axisX + k * GRID_PX - 28 + wc.ox}px;top:${CY + wc.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wc),
+        style: axisBase + `left:${axisX + k * GRID_PX - 28 + wc.ox}px;top:${CY + wc.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wc) + introStyle(axisX + k * GRID_PX + wc.ox, CY + wc.oy),
       });
       const wr = wrapAt(axisX, CY + k * GRID_PY);
       axisTicks.push({
         text: gridRowLetter(k),
-        style: axisBase + `left:${axisX - 28 + wr.ox}px;top:${CY + k * GRID_PY + wr.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wr),
+        style: axisBase + `left:${axisX - 28 + wr.ox}px;top:${CY + k * GRID_PY + wr.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wr) + introStyle(axisX + wr.ox, CY + k * GRID_PY + wr.oy),
       });
     }
 
@@ -2799,7 +2949,7 @@ class Component extends DCLogic {
         slot: 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
         alt: p.title + ' — ' + CAT_LABEL[p.cat].toLowerCase() + ' de Petit Bouquetin, studio créatif à Paris',
         open: openDetail(p),
-        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition};${magTransform}` + wrapOpacity(wrap),
+        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition};${magTransform}` + wrapOpacity(wrap) + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2),
         shadowStyle,
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
         capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
@@ -2825,7 +2975,7 @@ class Component extends DCLogic {
         src: d.src,
         loading: d.sundial ? 'eager' : 'lazy',
         style: `position:absolute;left:${d.x + w.ox}px;top:${d.y + w.oy}px;width:${d.w}px;height:${d.h}px;` +
-          `object-fit:contain;pointer-events:none;` + wrapOpacity(w, 0.9),
+          `object-fit:contain;pointer-events:none;` + wrapOpacity(w, 0.9) + introStyle(d.x + w.ox + d.w / 2, d.y + w.oy + d.h / 2, d.sundial ? 'dial' : ''),
       };
     });
 
@@ -2845,7 +2995,7 @@ class Component extends DCLogic {
     const textItems = this._texts.map((t) => ({ t, w: wrapAt(t.x + t.w / 2, t.y + t.h / 2) })).map(({ t, w }) => ({
       text: t.text, sig: t.sig || '', link: t.link || '', after: t.after || '',
       href: t.link ? contactMailHref : '',
-      boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;` + wrapOpacity(w),
+      boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;` + wrapOpacity(w) + introStyle(t.x + w.ox + t.w / 2, t.y + w.oy + t.h / 2),
       bodyStyle: textBodyStyle,
       sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
       linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:auto;cursor:pointer;`,
@@ -2864,7 +3014,7 @@ class Component extends DCLogic {
     const _vinylWrap = _vinyl ? wrapAt(_vinyl.x + _vinyl.w / 2, _vinyl.y + _vinyl.h / 2) : null;
     const vinylItem = _vinyl ? {
       href: _vinyl.href, src: _vinyl.src,
-      wrapStyle: wrapOpacity(_vinylWrap) + `position:absolute;left:${_vinyl.x + _vinylWrap.ox}px;top:${_vinyl.y + _vinylWrap.oy}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
+      wrapStyle: wrapOpacity(_vinylWrap) + introStyle(_vinyl.x + _vinylWrap.ox + _vinyl.w / 2, _vinyl.y + _vinylWrap.oy + _vinyl.h / 2) + `position:absolute;left:${_vinyl.x + _vinylWrap.ox}px;top:${_vinyl.y + _vinylWrap.oy}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
         `display:block;pointer-events:auto;cursor:inherit;text-decoration:none;`,
       imgStyle: `width:100%;height:100%;object-fit:contain;pointer-events:none;opacity:0.9;`,
     } : null;
@@ -2875,9 +3025,9 @@ class Component extends DCLogic {
     // right. On a narrow screen the wordmark takes its own row on top and the
     // five links share the row beneath it.
     const navNarrow = window.innerWidth < 760;
-    const navStyle = navNarrow
+    const navStyle = introStyle(0, 0, 'dial') + (navNarrow
       ? `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto;grid-template-areas:"brand brand" "left right";row-gap:12px;align-items:center;justify-items:center;padding:16px 16px 0;pointer-events:none;`
-      : `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:22px 32px;pointer-events:none;`;
+      : `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:22px 32px;pointer-events:none;`);
     const navGap = navNarrow ? 12 : 28;
     const navGroupLeftStyle = `display:flex;align-items:center;gap:${navGap}px;justify-self:start;${navNarrow ? 'grid-area:left;' : ''}`;
     const navGroupRightStyle = `display:flex;align-items:center;gap:${navGap}px;justify-self:end;${navNarrow ? 'grid-area:right;' : ''}`;
@@ -2908,8 +3058,8 @@ class Component extends DCLogic {
     const contactStyle = navItemStyle + `font-weight:700;border-bottom:1px solid ${ink};padding-bottom:1px;`; // underlined buttons are bold
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
-    const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
-    const compassBtnStyle = `position:fixed;bottom:24px;left:24px;z-index:70;width:38px;height:38px;background:none;border:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;`;
+    const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'dial');
+    const compassBtnStyle = `position:fixed;bottom:24px;left:24px;z-index:70;width:38px;height:38px;background:none;border:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'dial');
     const goCenter = () => this._glideHome();
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
     const closeSearch = () => this.setState({ searchOpen: false });
