@@ -70,6 +70,18 @@
 </script>
 <link rel="icon" type="image/png" href="images/miscellaneous/flavicon.png">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Typography: "prestige-elite-std" (Adobe Fonts kit, 400/700 + italics)
+     for all running text; Space Mono (Google Fonts, in <helmet>) only for
+     the project codes and axis marks; Picaflor (self-hosted, OFL) for the
+     "Petit Bouquetin" wordmark only. -->
+<link rel="stylesheet" href="https://use.typekit.net/pwp0pwm.css">
+<style>
+  @font-face {
+    font-family: 'Picaflor';
+    src: url('/fonts/Picaflor-12pt.woff2') format('woff2');
+    font-weight: 400; font-style: normal; font-display: swap;
+  }
+</style>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -128,7 +140,7 @@
 <helmet>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <script src="./image-slot.js"></script>
   <style>
     html, body { margin: 0; padding: 0; overflow: hidden; }
@@ -520,20 +532,23 @@ const SITE_SHARE_IMAGE = SITE_URL + '/images/og/petit-bouquetin-share.jpg';
 const CAT_LABEL = { edito: 'Éditorial', docu: 'Documentaire', poesie: 'Poésie', manifeste: 'Manifeste' };
 // ── Brand-name typography candidates ────────────────────────────────────
 // Only the "Petit Bouquetin" wordmark at the top left can use a different
-// face — everything else stays Courier Prime. Open the side-by-side
+// face — Picaflor (self-hosted, see the @font-face in <head>), with
+// prestige-elite-std as its fallback; everything else stays
+// prestige-elite-std. Open the side-by-side
 // comparer with ?brandfonts in the URL (the choice is remembered in this
 // browser while testing). Canela / GT Sectra, Reckless and Suisse Int'l are
 // licensed fonts with no free web build, so each shows a free look-alike
 // until the real files are bought: drop them in and point `family` at an
 // @font-face (and delete `stand`).
 const BRAND_FONTS = [
-  { id: 'courier',   label: 'Courier Prime',        stand: '',                     family: "'Courier Prime',monospace",  size: 14, ls: '0.08em',  weight: 400, note: 'actuel' },
+  { id: 'picaflor',  label: 'Picaflor',             stand: '',                     family: "'Picaflor','prestige-elite-std',monospace", size: 14, ls: '0.08em', weight: 400, note: 'actuel' },
+  { id: 'courier',   label: 'Courier Prime',        stand: '',                     family: "'Courier Prime',monospace",  size: 14, ls: '0.08em',  weight: 400, note: 'ancien' },
   { id: 'fraunces',  label: 'Fraunces',             stand: '',                     family: "'Fraunces',serif",           size: 22, ls: '-0.01em', weight: 500, note: '' },
   { id: 'canela',    label: 'GT Sectra / Canela',   stand: 'Playfair Display',     family: "'Playfair Display',serif",   size: 22, ls: '-0.005em', weight: 400, note: 'aperçu : Playfair Display' },
   { id: 'reckless',  label: 'Reckless',             stand: 'Young Serif',          family: "'Young Serif',serif",        size: 21, ls: '0',       weight: 400, note: 'aperçu : Young Serif' },
   { id: 'suisse',    label: "Suisse Int'l",         stand: 'Inter',                family: "'Inter',sans-serif",         size: 17, ls: '-0.015em', weight: 500, note: 'aperçu : Inter' },
 ];
-const BRAND_FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500&family=Playfair+Display:wght@400&family=Young+Serif&family=Inter:wght@500&display=swap';
+const BRAND_FONTS_CSS = 'https://fonts.googleapis.com/css2?family=Courier+Prime&family=Fraunces:opsz,wght@9..144,500&family=Playfair+Display:wght@400&family=Young+Serif&family=Inter:wght@500&display=swap';
 // Slug = the project's canvas coordinate code, lowercased: E-9E -> e-9e.
 // An off-canvas project (Poésie, Manifeste pages) has no coordinates, so it
 // gets its zone letter + its title instead: p-observation-florale.
@@ -954,7 +969,7 @@ class Component extends DCLogic {
     // just drops back to M·001's own view, not all the way out to the canvas.
     genesisOpen: false,
     // Brand-name typography comparer (see BRAND_FONTS).
-    brandFont: 'courier', brandPickerOpen: false,
+    brandFont: 'picaflor', brandPickerOpen: false,
     // Placeholder page opened from the top bar (Boutique, not built yet).
     soonPage: null,
     copied: false, hoverId: null, hoverSrc: null, hoverX: 0, hoverY: 0,
@@ -1037,7 +1052,7 @@ class Component extends DCLogic {
       document.head.appendChild(link);
       let saved = null;
       try { saved = localStorage.getItem('pb-brand-font'); } catch (e) {}
-      this.setState({ brandPickerOpen: true, brandFont: BRAND_FONTS.some((f) => f.id === saved) ? saved : 'courier' });
+      this.setState({ brandPickerOpen: true, brandFont: BRAND_FONTS.some((f) => f.id === saved) ? saved : 'picaflor' });
     }
 
     // ---- Per-project URL routing --------------------------------------
@@ -2630,7 +2645,7 @@ class Component extends DCLogic {
     const armLen = 76;
     const signWrap = wrapAt(CX, CY);
     const signBoxStyle = `position:absolute;left:${CX - 110 + signWrap.ox}px;top:${CY - 110 + signWrap.oy}px;width:220px;height:220px;` + wrapOpacity(signWrap);
-    const labelBase = `position:absolute;font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:${ink};white-space:nowrap;`;
+    const labelBase = `position:absolute;font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:${ink};white-space:nowrap;`;
     const signLabelRightStyle = labelBase + `left:${110 + armLen + 10}px;top:104px;`;
     const signLabelLeftStyle = labelBase + `right:${110 + armLen + 10}px;top:104px;text-align:right;`;
     // left:96px (a fixed left edge, not a centered one) made longer words
@@ -2789,7 +2804,7 @@ class Component extends DCLogic {
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
         capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
         codeStyle: `font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;color:${ink};white-space:nowrap;flex-shrink:0;`,
-        titleStyle: `font-family:'Courier Prime',monospace;font-size:14px;font-weight:700;color:${inkFaint};`,
+        titleStyle: `font-family:'prestige-elite-std',monospace;font-size:14px;font-weight:700;color:${inkFaint};`,
       };
     });
 
@@ -2826,13 +2841,13 @@ class Component extends DCLogic {
     // Cloudflare page instead of opening the mail client directly. Built
     // here, client-side, after that static scan, it is never seen.
     const contactMailHref = 'mailto:' + ['petitbouquetin.media', 'gmail.com'].join('@');
-    const textBodyStyle = `font-family:'Courier Prime',monospace;font-size:13px;line-height:1.6;color:${ink};margin:0;white-space:pre-line;`;
+    const textBodyStyle = `font-family:'prestige-elite-std',monospace;font-size:13px;line-height:1.6;color:${ink};margin:0;white-space:pre-line;`;
     const textItems = this._texts.map((t) => ({ t, w: wrapAt(t.x + t.w / 2, t.y + t.h / 2) })).map(({ t, w }) => ({
       text: t.text, sig: t.sig || '', link: t.link || '', after: t.after || '',
       href: t.link ? contactMailHref : '',
       boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;` + wrapOpacity(w),
       bodyStyle: textBodyStyle,
-      sigStyle: `font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
+      sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
       linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:auto;cursor:pointer;`,
     }));
 
@@ -2873,15 +2888,15 @@ class Component extends DCLogic {
     const brandPickerOpen = this.state.brandPickerOpen;
     const closeBrandPicker = () => this.setState({ brandPickerOpen: false });
     const brandPickerStyle = `position:fixed;top:68px;left:32px;z-index:75;width:min(340px,calc(100vw - 64px));max-height:calc(100vh - 140px);overflow:auto;background:${bg};border:1px solid ${inkFaint};padding:14px 16px 10px;pointer-events:auto;cursor:default;`;
-    const brandPickerHeadStyle = `display:flex;justify-content:space-between;align-items:baseline;font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${inkFaint};margin-bottom:6px;`;
-    const brandPickerCloseStyle = `font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${ink};background:none;border:none;border-bottom:1px solid ${ink};padding:0;cursor:pointer;`;
+    const brandPickerHeadStyle = `display:flex;justify-content:space-between;align-items:baseline;font-family:'prestige-elite-std',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${inkFaint};margin-bottom:6px;`;
+    const brandPickerCloseStyle = `font-family:'prestige-elite-std',monospace;font-weight:700;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:${ink};background:none;border:none;border-bottom:1px solid ${ink};padding:0;cursor:pointer;`;
     const brandOptions = BRAND_FONTS.map((f) => {
       const on = f.id === this.state.brandFont;
       return {
         label: f.label + (f.note ? ' — ' + f.note : ''),
         pick: () => { try { localStorage.setItem('pb-brand-font', f.id); } catch (e) {} this.setState({ brandFont: f.id }); },
         rowStyle: `display:block;width:100%;text-align:left;background:none;border:none;border-top:1px solid ${inkFaint};padding:12px 0 10px;cursor:pointer;opacity:${on ? 1 : 0.62};`,
-        tagStyle: `display:block;font-family:'Courier Prime',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};margin-bottom:6px;`,
+        tagStyle: `display:block;font-family:'prestige-elite-std',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};margin-bottom:6px;`,
         sampleStyle: `display:block;font-family:${f.family};font-size:${f.size}px;font-weight:${f.weight};letter-spacing:${f.ls};color:${ink};`,
         mark: on ? '● ' : '○ ',
       };
@@ -2889,8 +2904,8 @@ class Component extends DCLogic {
     // Every top-bar link shares one sober look (Courier Prime, small caps
     // spacing, black); Contact keeps its underline as the outermost action.
     const navFont = navNarrow ? 11 : 13, navLs = navNarrow ? '0.08em' : '0.14em';
-    const navItemStyle = `font-family:'Courier Prime',monospace;font-size:${navFont}px;letter-spacing:${navLs};text-transform:uppercase;color:${ink};pointer-events:auto;white-space:nowrap;`;
-    const contactStyle = navItemStyle + `border-bottom:1px solid ${ink};padding-bottom:1px;`;
+    const navItemStyle = `font-family:'prestige-elite-std',monospace;font-size:${navFont}px;letter-spacing:${navLs};text-transform:uppercase;color:${ink};pointer-events:auto;white-space:nowrap;`;
+    const contactStyle = navItemStyle + `font-weight:700;border-bottom:1px solid ${ink};padding-bottom:1px;`; // underlined buttons are bold
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
     const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;`;
@@ -2915,8 +2930,8 @@ class Component extends DCLogic {
     const soonOpen = !!this.state.soonPage;
     const soonTitle = this.state.soonPage || '';
     const soonColStyle = `max-width:480px;margin:120px auto 0;display:flex;flex-direction:column;align-items:center;text-align:center;`;
-    const soonTitleStyle = `font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.24em;text-transform:uppercase;color:${ink};`;
-    const soonNoteStyle = `font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.06em;color:${inkFaint};margin-top:14px;`;
+    const soonTitleStyle = `font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.24em;text-transform:uppercase;color:${ink};`;
+    const soonNoteStyle = `font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.06em;color:${inkFaint};margin-top:14px;`;
     const stop = (e) => e.stopPropagation();
     const onSearchChange = (e) => this.setState({ searchQuery: e.target.value });
 
@@ -2941,15 +2956,15 @@ class Component extends DCLogic {
         onLeave: () => this.setState((s) => s.hoverId === p.pcode ? { hoverId: null, hoverSrc: null } : null),
         cellStyle: `display:block;padding:5px 4px;cursor:pointer;background:${hovered ? 'rgba(0,0,0,0.04)' : 'transparent'};`,
         codeStyle: `font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.04em;color:${ink};`,
-        titleStyle: `font-family:'Courier Prime',monospace;font-size:12px;line-height:1.35;color:${inkFaint};`,
-        yearStyle: `font-family:'Courier Prime',monospace;font-size:11px;color:${inkFaint};opacity:0.7;`,
+        titleStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.35;color:${inkFaint};`,
+        yearStyle: `font-family:'prestige-elite-std',monospace;font-size:11px;color:${inkFaint};opacity:0.7;`,
       };
     };
     // Exactly 4 fixed columns, one per direction — never mixed, never
     // reflowed by result count. Each lists every match in its own category,
     // stacked vertically under a small-caps label.
     const searchColumnStyle = `display:flex;flex-direction:column;gap:2px;`;
-    const searchColLabelStyle = `font-family:'Courier Prime',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-variant:small-caps;color:${ink};margin-bottom:12px;`;
+    const searchColLabelStyle = `font-family:'prestige-elite-std',monospace;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-variant:small-caps;color:${ink};margin-bottom:12px;`;
     const searchCol = (cat, label) => ({
       label,
       colStyle: searchColumnStyle,
@@ -2974,7 +2989,7 @@ class Component extends DCLogic {
 
     const searchOverlayStyle = `position:fixed;inset:0;z-index:80;background:rgba(255,255,255,0.9);display:flex;align-items:flex-start;justify-content:center;padding-top:14vh;`;
     const searchModalStyle = `width:min(92vw,860px);max-height:80vh;overflow-y:auto;`;
-    const searchInputStyle = `width:100%;font-family:'Courier Prime',monospace;font-size:20px;color:${ink};background:transparent;border:none;border-bottom:1px solid ${ink};padding:6px 2px 12px;outline:none;`;
+    const searchInputStyle = `width:100%;font-family:'prestige-elite-std',monospace;font-size:20px;color:${ink};background:transparent;border:none;border-bottom:1px solid ${ink};padding:6px 2px 12px;outline:none;`;
     const searchListStyle = `display:grid;grid-template-columns:repeat(4,1fr);gap:0 28px;margin-top:24px;align-items:start;`;
 
     // Project gallery overlay. dItem's own `gallery` (every image in its
@@ -3011,24 +3026,24 @@ class Component extends DCLogic {
     // the user's place on it.
     const newsletterColStyle = `max-width:480px;margin:60px auto 0;display:flex;flex-direction:column;align-items:center;`;
     const newsletterBtnRowStyle = `display:flex;flex-direction:column;gap:22px;margin-top:36px;width:100%;align-items:center;`;
-    const newsletterBtnStyle = `font-family:'Courier Prime',monospace;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:${ink};border-bottom:1px solid ${ink};padding-bottom:3px;cursor:pointer;`;
+    const newsletterBtnStyle = `font-family:'prestige-elite-std',monospace;font-weight:700;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;color:${ink};border-bottom:1px solid ${ink};padding-bottom:3px;cursor:pointer;`;
 
     const manifestoOverlayStyle = `position:fixed;inset:0;z-index:90;background:${bg};overflow-y:auto;`;
     const manifestoColStyle = `max-width:900px;margin:0 auto;padding:120px 32px 140px;display:flex;flex-direction:column;`;
     const manifestoHeaderStyle = `font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;text-align:center;color:${ink};margin:70px 0 10px;`;
-    const manifestoTextStyle = `font-family:'Courier Prime',monospace;font-size:14px;line-height:1.7;color:${inkFaint};text-align:left;margin:18px 0 0;`;
+    const manifestoTextStyle = `font-family:'prestige-elite-std',monospace;font-size:14px;line-height:1.7;color:${inkFaint};text-align:left;margin:18px 0 0;`;
     const manifestoImgStyle = `display:block;width:100%;height:auto;`;
     // Underlined + a pointer cursor: this line doubles as the entry point
     // into GENESIS_SCROLL (see its own comment) — the same "underlined word
     // is secretly a button" pattern as the rest of this site's easter eggs,
     // just nested one layer deeper than the M·001 tile itself.
-    const manifestoFooterStyle = `font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};text-align:center;margin:110px 0 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;`;
+    const manifestoFooterStyle = `font-family:'prestige-elite-std',monospace;font-weight:700;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};text-align:center;margin:110px 0 0;text-decoration:underline;text-underline-offset:3px;cursor:pointer;`;
     // The opening statement (MANIFESTO_SCROLL's 'intro' entry) reads as
     // the manifesto proper — centered, a little larger and more spaced
     // than the logbook captions below it, so it holds its own weight
     // before the visual story starts.
     const manifestoIntroWrapStyle = `max-width:640px;margin:0 auto;`;
-    const manifestoIntroParaStyle = `font-family:'Courier Prime',monospace;font-size:16px;line-height:1.75;color:${ink};text-align:center;margin:28px 0 0;`;
+    const manifestoIntroParaStyle = `font-family:'prestige-elite-std',monospace;font-size:16px;line-height:1.75;color:${ink};text-align:center;margin:28px 0 0;`;
     // Each "pair" entry sits in its own half-width column, pinned left or
     // right via margin auto (not a 2-col grid — that would force every
     // row into the same rigid track regardless of image shape). Body text
@@ -3078,18 +3093,18 @@ class Component extends DCLogic {
     const genesisInkFaint = 'rgba(205,221,240,0.5)';
     const genesisAccent = '#3377bb';
     const genesisOverlayStyle = `position:fixed;inset:0;z-index:95;background:${genesisBg};overflow-y:auto;`;
-    const genesisCloseStyle = `position:fixed;top:24px;left:32px;z-index:96;font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.1em;color:${genesisInkFaint};background:none;border:none;cursor:pointer;padding:0;`;
+    const genesisCloseStyle = `position:fixed;top:24px;left:32px;z-index:96;font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.1em;color:${genesisInkFaint};background:none;border:none;cursor:pointer;padding:0;`;
     const genesisColStyle = `max-width:640px;margin:0 auto;padding:130px 32px 160px;display:flex;flex-direction:column;align-items:center;`;
     const genesisTitleStyle = `font-family:'Space Mono',monospace;font-size:13px;letter-spacing:0.3em;text-transform:uppercase;text-align:center;color:${genesisInk};`;
-    const genesisSubtitleStyle = `font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.06em;text-align:center;color:${genesisInkFaint};margin:12px 0 0;`;
+    const genesisSubtitleStyle = `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.06em;text-align:center;color:${genesisInkFaint};margin:12px 0 0;`;
     const genesisHeaderStyle = `font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.24em;text-transform:uppercase;text-align:center;color:${genesisInk};margin:90px 0 10px;`;
-    const genesisParaStyle = `font-family:'Courier Prime',monospace;font-size:15px;line-height:1.85;color:${genesisInk};text-align:center;margin:26px 0 0;`;
+    const genesisParaStyle = `font-family:'prestige-elite-std',monospace;font-size:15px;line-height:1.85;color:${genesisInk};text-align:center;margin:26px 0 0;`;
     const genesisImgWrapStyle = `width:100%;margin:130px 0 0;display:flex;flex-direction:column;align-items:flex-start;`;
     const genesisImgStyle = `display:block;width:100%;height:auto;`;
-    const genesisCaptionStyle = `font-family:'Courier Prime',monospace;font-size:13.5px;line-height:1.75;color:${genesisInkFaint};text-align:left;margin:22px 0 0;`;
-    const genesisLearnedStyle = `font-family:'Courier Prime',monospace;font-size:13.5px;line-height:1.75;font-style:italic;color:${genesisAccent};text-align:left;margin:8px 0 0;`;
+    const genesisCaptionStyle = `font-family:'prestige-elite-std',monospace;font-size:13.5px;line-height:1.75;color:${genesisInkFaint};text-align:left;margin:22px 0 0;`;
+    const genesisLearnedStyle = `font-family:'prestige-elite-std',monospace;font-size:13.5px;line-height:1.75;font-style:italic;color:${genesisAccent};text-align:left;margin:8px 0 0;`;
     const genesisCloserStyle = `${genesisParaStyle}margin-top:26px;`;
-    const genesisCreditStyle = `font-family:'Courier Prime',monospace;font-size:12px;letter-spacing:0.05em;color:${genesisInkFaint};text-align:center;margin:120px 0 0;`;
+    const genesisCreditStyle = `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.05em;color:${genesisInkFaint};text-align:center;margin:120px 0 0;`;
     const genesisEmailStyle = `color:rgba(205,221,240,0.7);text-decoration:underline;text-underline-offset:2px;`;
     const genesisEntries = GENESIS_SCROLL.map((e) => {
       const base = { isMasthead: false, isHeader: false, isIntro: false, isImage: false, isCloser: false };
@@ -3117,13 +3132,13 @@ class Component extends DCLogic {
     });
 
     const detailOverlayStyle = `position:fixed;inset:0;z-index:90;background:${bg};padding:80px 48px 48px;overflow:auto;`;
-    const detailCloseStyle = `position:fixed;top:24px;left:32px;z-index:91;font-family:'Courier Prime',monospace;font-size:13px;letter-spacing:0.1em;color:${ink};background:none;border:none;cursor:pointer;padding:0;`;
+    const detailCloseStyle = `position:fixed;top:24px;left:32px;z-index:91;font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.1em;color:${ink};background:none;border:none;cursor:pointer;padding:0;`;
     const detailGridStyle = `display:grid;grid-template-columns:35% 65%;gap:48px;max-width:1240px;margin:0 auto;align-items:start;`;
 
     const detailLeftStyle = `display:flex;flex-direction:column;`;
     // Credits now sit on their own line BELOW the thumbnail grid (margin-top,
     // not -bottom) rather than above it.
-    const detailCreditsStyle = `font-family:'Courier Prime',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};margin-top:16px;`;
+    const detailCreditsStyle = `font-family:'prestige-elite-std',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:${inkFaint};margin-top:16px;`;
     const detailCredits = (dItem && dItem.credits) || 'Crédits à venir';
 
     const detailThumbGridStyle = `display:grid;grid-template-columns:repeat(4,1fr);gap:3px;`;
@@ -3145,7 +3160,7 @@ class Component extends DCLogic {
     const detailActiveAlt = dItem ? (dItem.gallery[this.state.detailActiveIdx] ? galleryAlt(this.state.detailActiveIdx) : dItem.title + ' — Petit Bouquetin') : '';
     const detailNoImage = !!dItem && !detailActiveSrc;
     const detailImgStyle = `max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain;display:block;`;
-    const detailPlaceholderStyle = `width:100%;aspect-ratio:4/5;max-height:70vh;background:${tileBg};display:flex;align-items:center;justify-content:center;font-family:'Courier Prime',monospace;font-size:13px;color:${inkFaint};text-align:center;padding:24px;`;
+    const detailPlaceholderStyle = `width:100%;aspect-ratio:4/5;max-height:70vh;background:${tileBg};display:flex;align-items:center;justify-content:center;font-family:'prestige-elite-std',monospace;font-size:13px;color:${inkFaint};text-align:center;padding:24px;`;
 
     const detailCapStyle = `display:flex;gap:10px;align-items:baseline;justify-content:center;margin-top:20px;`;
     const detailCodeStyle = `font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.04em;color:${ink};`;
@@ -3164,7 +3179,7 @@ class Component extends DCLogic {
     // only the image itself changes size.
     const rawIntentionParas = (dItem && dItem.intentionsParas && dItem.intentionsParas.length) ? dItem.intentionsParas : ['Intentions du projet à venir.'];
     const detailIntentionsStyle = `display:flex;flex-direction:column;gap:16px;margin:20px auto 0;width:100%;max-width:480px;`;
-    const detailIntentionsParaStyle = `font-family:'Courier Prime',monospace;font-size:13px;line-height:1.6;color:${inkFaint};text-align:justify;margin:0;`;
+    const detailIntentionsParaStyle = `font-family:'prestige-elite-std',monospace;font-size:13px;line-height:1.6;color:${inkFaint};text-align:justify;margin:0;`;
     const detailIntentionsParas = rawIntentionParas.map((text) => ({ text, style: detailIntentionsParaStyle }));
 
     return {
