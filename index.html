@@ -561,8 +561,15 @@ const INTRO_FADE_MS = 600;          // video -> real dial cross-fade
 const INTRO_WAVE_MS = 1400;         // spread of the waves, cross to rim
 const INTRO_PIECE_MS = 600;         // each piece's own fade
 const INTRO_FALLBACK_MS = 1000;     // poster shown this long when there's no video
-const INTRO_LOAD_TIMEOUT_MS = 1500; // video not playing by then -> poster
-const INTRO_CAP_MS = 5000;          // the video phase never lasts longer
+// Video not playing by then -> poster. Generous enough for a first visit on
+// an average connection (Safari buffers more than Chrome before it starts);
+// a refused autoplay (e.g. Safari in Low Power Mode) falls back at once.
+const INTRO_LOAD_TIMEOUT_MS = 3000;
+// Once the film is playing, the video phase ends at the latest this long
+// after its expected end (film length / playback rate), even if it stalls.
+// Counted from the start of playback, not from page load, so a late start
+// can never cut the end of the film.
+const INTRO_CAP_MARGIN_MS = 1500;
 const INTRO_TITLE_PX = 56;          // wordmark font size during the video (px), whatever its size at rest
 const INTRO_TITLE_GAP = 28;         // px between the big wordmark and the dial
 const INTRO_BAR_MS = 400;           // top bar / corner buttons fade, once the wordmark has landed
@@ -1061,6 +1068,7 @@ class Component extends DCLogic {
     intro: introWanted() ? 'video' : null,
     introTitle: null, // the wordmark's transform during the video (see _placeIntroVideo)
     introTitleOn: false, // the big wordmark has appeared (close-up reached)
+    introPlain: false,   // no film (poster fallback): the wordmark stays in place
     hint: false,      // navigation hint on screen (see _armHint)
   };
 
@@ -1334,9 +1342,11 @@ class Component extends DCLogic {
   // then the top bar and corner buttons fade in, while every piece fades in,
   // delayed by its distance from the cross (INTRO_WAVE_MS spread) -> null. Any click, scroll, touch or key jumps straight to the end.
   // Reduced motion, a video error, blocked autoplay or a slow load show the
-  // poster instead and move on after INTRO_FALLBACK_MS. The video phase is
-  // capped at INTRO_CAP_MS whatever happens; the canvas is usable from the
-  // moment the reveal starts. Each step leaves a performance mark
+  // poster instead, with the wordmark simply in its place (no big title: on
+  // the still image it read as a glitch), and move on after
+  // INTRO_FALLBACK_MS. Once playing, the video phase is capped at the film's
+  // length + INTRO_CAP_MARGIN_MS; the canvas is usable from the moment the
+  // reveal starts. Each step leaves a performance mark
   // (pb-intro-*) for timing checks.
   _startIntro() {
     try { sessionStorage.setItem(INTRO_SEEN_KEY, '1'); } catch (e) {}
@@ -1357,6 +1367,15 @@ class Component extends DCLogic {
     this._placeIntroVideo();
     this._onIntroResize = () => this._placeIntroVideo();
     window.addEventListener('resize', this._onIntroResize);
+    // The big wordmark's size and position are measured off the real one in
+    // the top bar. On a first visit Picaflor may not be loaded yet, so that
+    // first measure is taken on the fallback face (much wider): measure again
+    // once the fonts are in, or the title would sit off-centre, too small, and
+    // shrink back to the wrong place.
+    if (document.fonts) {
+      if (document.fonts.ready) document.fonts.ready.then(() => this._placeIntroVideo());
+      document.fonts.addEventListener && document.fonts.addEventListener('loadingdone', this._onIntroResize);
+    }
 
     // Poster instead of the film, then on with the sequence.
     const fallback = (why) => {
@@ -1366,13 +1385,15 @@ class Component extends DCLogic {
       clearTimeout(this._introLoadTimer);
       try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} // back to the poster
       this._zoomIntroVideo(); // poster = last frame: final geometry, no cover
-      this.setState({ introTitleOn: true });
+      this.setState({ introPlain: true }); // wordmark stays in the top bar
       this._introFallbackTimer = setTimeout(() => this._introReveal(), INTRO_FALLBACK_MS);
     };
     if (this._introReduced) fallback('reduced-motion');
     else {
       v.addEventListener('playing', () => {
         this._introPlaying = true; clearTimeout(this._introLoadTimer); performance.mark('pb-intro-playing');
+        const filmMs = ((v.duration || 5) / INTRO_PLAYBACK_RATE) * 1000;
+        this._introCapTimer = setTimeout(() => { if (this.state.intro === 'video') { performance.mark('pb-intro-cap'); this._introReveal(); } }, filmMs + INTRO_CAP_MARGIN_MS);
         const tick = () => {
           if (!this._introVideo || this.state.intro !== 'video') return;
           this._zoomIntroVideo();
@@ -1395,7 +1416,6 @@ class Component extends DCLogic {
       if (played && played.catch) played.catch(() => fallback('autoplay-blocked'));
       this._introLoadTimer = setTimeout(() => { if (!this._introPlaying) fallback('load-timeout'); }, INTRO_LOAD_TIMEOUT_MS);
     }
-    this._introCapTimer = setTimeout(() => { if (this.state.intro === 'video') { performance.mark('pb-intro-cap'); this._introReveal(); } }, INTRO_CAP_MS);
 
     this._introSkip = () => { performance.mark('pb-intro-skip'); this._touched = true; this._introFinish(); };
     for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) {
@@ -1542,7 +1562,11 @@ class Component extends DCLogic {
       }
       this._introSkip = null;
     }
-    if (this._onIntroResize) { window.removeEventListener('resize', this._onIntroResize); this._onIntroResize = null; }
+    if (this._onIntroResize) {
+      window.removeEventListener('resize', this._onIntroResize);
+      if (document.fonts && document.fonts.removeEventListener) document.fonts.removeEventListener('loadingdone', this._onIntroResize);
+      this._onIntroResize = null;
+    }
     if (this._introVideo) { try { this._introVideo.pause(); } catch (e) {} this._introVideo.remove(); this._introVideo = null; }
   }
 
@@ -3224,7 +3248,7 @@ class Component extends DCLogic {
     // It lets drags through while it's big. With reduced motion it simply
     // stays where it belongs.
     const it = this.state.introTitle;
-    const brandIntro = (!intro || this._introReduced) ? ''
+    const brandIntro = (!intro || this._introReduced || this.state.introPlain) ? ''
       : intro === 'video'
         ? (it ? `transform:translate(${it.dx}px,${it.dy}px) scale(${it.s});transform-origin:center;pointer-events:none;` +
             (this.state.introTitleOn ? `animation:pb-intro-in ${INTRO_TITLE_FADE_MS}ms ease both;` : 'opacity:0;') : 'opacity:0;')
