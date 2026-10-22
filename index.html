@@ -3516,23 +3516,27 @@ class Component extends DCLogic {
     // changes nothing there — it only clamps in as you zoom out.
     const MAG_RADIUS_WORLD_CAP = 900;
     const MAG_RADIUS = Math.min(MAG_RADIUS_SCREEN, MAG_RADIUS_WORLD_CAP * zoom);
+    // Every tile grows by the same amount (magMax): each one's own ceiling
+    // (its size against the clear gap around it) differed — 1.6 for some
+    // cards on the home map, 1.22 for the tighter ones and every copy — so
+    // some popped up much more than others. The shared value is the lowest
+    // of those ceilings, so no tile can reach a neighbour. (MAG_SAFETY
+    // keeps a margin: two neighbours may both grow toward each other.)
+    const tileCeiling = (p) => Math.min(
+      MAG_MAX_SCALE,
+      1 + (p.safeGrow * MAG_SAFETY) / p.w,
+      1 + (p.safeGrow * MAG_SAFETY) / (p.h + 90), // +caption strip, see ALL()'s NEIGHBOR_CAP_H
+    );
+    if (this._magMax === undefined) {
+      this._magMax = Math.min(...[...all.filter((p) => !p.offCanvas), ...(this._fillers || [])].map(tileCeiling));
+    }
+    const magMax = this._magMax;
     const tileScale = (p, wrap) => {
       const worldDx = (p.x + wrap.ox + p.w / 2) - dispX, worldDy = (p.y + wrap.oy + p.h / 2) - dispY;
       const screenDist = Math.hypot(worldDx, worldDy) * zoom;
       const t = Math.max(0, Math.min(1, 1 - screenDist / MAG_RADIUS));
       const smooth = t * t * (3 - 2 * t); // smoothstep: progressive in, progressive out
-      // safeGrow/2 per side (not safeGrow, as the single-hover version
-      // used) — with EVERY nearby tile potentially growing at once now
-      // rather than just one hovered tile, two neighbors could both grow
-      // toward each other simultaneously; halving keeps their COMBINED
-      // encroachment within the same safe fraction of the gap between
-      // them that a single grower alone used to get.
-      const tileMax = Math.min(
-        MAG_MAX_SCALE,
-        1 + (p.safeGrow * MAG_SAFETY) / p.w,
-        1 + (p.safeGrow * MAG_SAFETY) / (p.h + 90), // +caption strip, see ALL()'s NEIGHBOR_CAP_H
-      );
-      const scale = 1 + (tileMax - 1) * smooth;
+      const scale = 1 + (magMax - 1) * smooth;
       return { scale, smooth };
     };
 
