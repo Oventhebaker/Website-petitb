@@ -822,6 +822,9 @@ const PINCH_ACTIVATE_RATIO = 0.05;   // used when PINCH_ACTIVATE_MODE === 'ratio
 // narrow screens, where that fit would be tinier than anyone could read. See
 // the component's minZoom().
 const NORMAL_MIN_ZOOM = 0.15;
+// How long the camera stays still before the world drops its moving layer
+// (see componentDidUpdate).
+const MOVING_IDLE_MS = 200;
 const CONTENT_HALF_W = 5 * 480 + 130 + 40;
 
 // ── WebKit rendering path ────────────────────────────────────────────────
@@ -1122,6 +1125,7 @@ class Component extends DCLogic {
     // homeZoom() below.
     zoom: this.homeZoom(),
     dragging: false, lastX: 0, lastY: 0, navigating: false,
+    moving: false,    // the camera moved in the last MOVING_IDLE_MS (see componentDidUpdate)
     detail: null, detailIdx: 0, detailActiveIdx: 0, searchOpen: false, searchQuery: '',
     // Second-layer easter egg — see GENESIS_SCROLL's own comment. Sits on
     // top of the manifesto scroll (doesn't touch `detail`), so closing it
@@ -1732,6 +1736,7 @@ class Component extends DCLogic {
 
   componentWillUnmount() {
     if (this._panRaf) cancelAnimationFrame(this._panRaf);
+    clearTimeout(this._movingTimer);
     window.removeEventListener('keydown', this._onGalleryKey);
     this._introCleanup();
     if (this._hintDone) { clearTimeout(this._hintTimer); for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) window.removeEventListener(type, this._hintDone, { capture: true }); }
@@ -1758,6 +1763,20 @@ class Component extends DCLogic {
     // is open. Single choke point for every open path — canvas card,
     // search result, "← Retour", and browser back/forward.
     this._syncRoute();
+    // The camera moved (drag, pinch, wheel, momentum, a glide): the world
+    // gets its own layer until it has been still for MOVING_IDLE_MS. Safari
+    // then moves and scales the picture it already has instead of redrawing
+    // every photo and text at each step — the zoom, especially, used to be
+    // redrawn in full at every frame — and redraws once, sharp, at rest.
+    // Only while moving: kept on for good, the layer would hold memory for
+    // nothing (the pattern from github.com/andreabuttarelli/feega/pull/553).
+    const { camX, camY, zoom } = this.state;
+    if (camX !== this._prevCamX || camY !== this._prevCamY || zoom !== this._prevZoom) {
+      this._prevCamX = camX; this._prevCamY = camY; this._prevZoom = zoom;
+      if (!this.state.moving) this.setState({ moving: true });
+      clearTimeout(this._movingTimer);
+      this._movingTimer = setTimeout(() => this.setState({ moving: false }), MOVING_IDLE_MS);
+    }
   }
 
   // ---- Momentum -------------------------------------------------------
@@ -1786,11 +1805,11 @@ class Component extends DCLogic {
     let alive = false;
 
     if (this._panVel) {
-      // Rate + stop-threshold are tuned together: a strong flick (~1.9
-      // world-units/ms) settles in ~500ms, a gentle one sooner — using a
-      // tiny absolute stop-threshold instead would make every glide take
-      // several seconds to decay away regardless of how slow it started.
-      const FRICTION = 0.01; // per-ms decay
+      // iOS's own scroll deceleration: the speed keeps 99.8 % of itself
+      // every millisecond (UIScrollView's "normal" rate), so a flick glides
+      // on for about half a second like a native list. It used to lose 1 %
+      // per ms — stopped in a tenth of a second, too short to feel at all.
+      const FRICTION = 0.002; // per-ms decay
       this.setState(s => ({
         camX: s.camX - this._panVel.x * dt,
         camY: s.camY - this._panVel.y * dt,
@@ -1799,7 +1818,8 @@ class Component extends DCLogic {
       const decay = Math.exp(-FRICTION * dt);
       this._panVel.x *= decay;
       this._panVel.y *= decay;
-      if (Math.hypot(this._panVel.x, this._panVel.y) > 0.01) alive = true;
+      // Stops once it's slower than 0.02 px/ms on screen, whatever the zoom.
+      if (Math.hypot(this._panVel.x, this._panVel.y) * this.state.zoom > 0.02) alive = true;
       else this._panVel = null;
     }
 
@@ -3393,7 +3413,7 @@ class Component extends DCLogic {
     const dimFor = (cat) => (filter && cat !== filter ? FILTER_DIM : 1);
     const filterFade = `opacity ${FILTER_FADE_MS}ms ease`;
 
-    const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
+    const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;${this.state.moving ? 'will-change:transform;' : ''}transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
 
     // Sign
     const armLen = 76;
