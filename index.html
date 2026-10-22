@@ -822,6 +822,14 @@ const PINCH_ACTIVATE_RATIO = 0.05;   // used when PINCH_ACTIVATE_MODE === 'ratio
 // narrow screens, where that fit would be tinier than anyone could read. See
 // the component's minZoom().
 const NORMAL_MIN_ZOOM = 0.15;
+// The zoom-out floor on a phone or tablet (see minZoom).
+const TOUCH_MIN_ZOOM = 0.24;
+const IS_TOUCH_SCREEN = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+// Below this zoom the canvas's texts and the cards' captions are a few px
+// tall, unreadable: they fade out, which also spares Safari redrawing them
+// while the view moves. LOD_ZOOM_OUT / _IN: a little apart, so hovering
+// right at the threshold doesn't make them flicker.
+const LOD_ZOOM_OUT = 0.38, LOD_ZOOM_IN = 0.42;
 // How long the camera stays still before the world drops its moving layer
 // (see componentDidUpdate).
 const MOVING_IDLE_MS = 200;
@@ -2533,7 +2541,11 @@ class Component extends DCLogic {
   }
 
   minZoom() {
-    return Math.max(NORMAL_MIN_ZOOM, window.innerWidth / (2 * CONTENT_HALF_W));
+    // A phone or tablet stops sooner (TOUCH_MIN_ZOOM): further out, the
+    // cards are unreadable specks, and Safari had dozens of them to redraw
+    // on every frame of a pan — that's where it stuttered.
+    const floor = IS_TOUCH_SCREEN && window.innerWidth < 1024 ? TOUCH_MIN_ZOOM : NORMAL_MIN_ZOOM;
+    return Math.max(floor, window.innerWidth / (2 * CONTENT_HALF_W));
   }
 
   // Zooms while keeping the world point under (clientX, clientY) fixed on
@@ -3300,6 +3312,9 @@ class Component extends DCLogic {
     const tileBg = '#EFECE4';
 
     const zoom = this.state.zoom;
+    // Far out: texts and captions fade out (see LOD_ZOOM_OUT).
+    if (this._lod ? zoom > LOD_ZOOM_IN : zoom < LOD_ZOOM_OUT) this._lod = !this._lod;
+    const lodStyle = `opacity:${this._lod ? 0 : 1};transition:opacity 300ms ease;`;
     const dispX = ((this.state.camX % WRAP_W) + WRAP_W) % WRAP_W;
     const dispY = ((this.state.camY % WRAP_H) + WRAP_H) % WRAP_H;
     const transition = this.state.navigating ? 'transform 0.9s cubic-bezier(0.22,1,0.36,1)' : 'none';
@@ -3574,7 +3589,7 @@ class Component extends DCLogic {
         wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition === 'none' ? filterFade : transition + ', ' + filterFade};${magTransform}` + wrapOpacity(wrap, dimFor(p.cat)) + (dimFor(p.cat) < 1 ? 'pointer-events:none;' : '') + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2) + (fillerHidden ? 'display:none;' : ''),
         shadowStyle,
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
-        capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
+        capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;` + lodStyle,
         codeStyle: `font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;color:${ink};white-space:nowrap;flex-shrink:0;`,
         titleStyle: `font-family:'prestige-elite-std',monospace;font-size:14px;font-weight:700;color:${inkFaint};`,
       };
@@ -3620,8 +3635,8 @@ class Component extends DCLogic {
       text: t.text, sig: t.sig || '', link: t.link || '', after: t.after || '',
       href: t.link ? contactMailHref : '',
       boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;transition:${filterFade};` + wrapOpacity(w, dimFor(null)) + introStyle(t.x + w.ox + t.w / 2, t.y + w.oy + t.h / 2),
-      bodyStyle: textBodyStyle,
-      sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
+      bodyStyle: textBodyStyle + lodStyle,
+      sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;` + lodStyle,
       linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:${filter ? 'none' : 'auto'};cursor:pointer;`,
     }));
 
@@ -3846,10 +3861,15 @@ class Component extends DCLogic {
     const previewTop = Math.min(this.state.hoverY + 18, window.innerHeight - 40);
     const previewImgStyle = `position:fixed;left:${previewLeft}px;top:${previewTop}px;width:${PREVIEW_W}px;height:auto;max-height:260px;object-fit:cover;box-shadow:0 10px 30px rgba(0,0,0,0.5);pointer-events:none;z-index:95;background:${tileBg};`;
 
-    const searchOverlayStyle = `position:fixed;inset:0;z-index:80;background:rgba(255,255,255,0.9);display:flex;align-items:flex-start;justify-content:center;padding-top:14vh;`;
-    const searchModalStyle = `width:min(92vw,860px);max-height:80vh;overflow-y:auto;`;
+    // A narrow screen can't fit the four columns side by side (the last one
+    // ran off the right edge): two columns there, and the list scrolls
+    // within whatever height is left under the field.
+    const searchNarrow = window.innerWidth < 760;
+    const searchTop = searchNarrow ? '10vh' : '14vh';
+    const searchOverlayStyle = `position:fixed;inset:0;z-index:80;background:rgba(255,255,255,${searchNarrow ? 0.97 : 0.9});display:flex;align-items:flex-start;justify-content:center;padding-top:${searchTop};`;
+    const searchModalStyle = `width:min(92vw,860px);max-height:calc(100% - ${searchTop} - 16px);overflow-y:auto;-webkit-overflow-scrolling:touch;`;
     const searchInputStyle = `width:100%;font-family:'prestige-elite-std',monospace;font-size:20px;color:${ink};background:transparent;border:none;border-bottom:1px solid ${ink};padding:6px 2px 12px;outline:none;`;
-    const searchListStyle = `display:grid;grid-template-columns:repeat(4,1fr);gap:0 28px;margin-top:24px;align-items:start;`;
+    const searchListStyle = `display:grid;grid-template-columns:repeat(${searchNarrow ? 2 : 4},minmax(0,1fr));gap:${searchNarrow ? '28px 18px' : '0 28px'};margin-top:24px;align-items:start;`;
 
     // Project gallery overlay. dItem's own `gallery` (every image in its
     // folder) drives the left thumbnail grid; hovering a thumbnail swaps
