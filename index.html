@@ -445,7 +445,7 @@
           <div style="{{detailThumbGridStyle}}">
             <sc-for list="{{detailThumbs}}" as="t" hint-placeholder-count="9">
               <div onMouseEnter="{{t.onHover}}" onClick="{{t.onHover}}" style="{{t.thumbStyle}}">
-                <img src="{{t.src}}" alt="{{t.alt}}" style="{{t.imgStyle}}"></img>
+                <img src="{{t.thumb}}" alt="{{t.alt}}" style="{{t.imgStyle}}" loading="lazy" decoding="async" onError="{{t.onThumbError}}"></img>
               </div>
             </sc-for>
           </div>
@@ -895,6 +895,9 @@ const CANVAS_TEXTS = [
   { text: "carte communautaire d'observation diaphane\n(pour participer envoyer moi simplement un ", link: "email", after: ")" },
 ];
 
+// A gallery photo's thumbnail: images/x/y.webp → images/_thumbs/x/y.webp,
+// made by tools/build_thumbs.py (run it after adding photos).
+const thumbOf = (src) => src.replace('images/', 'images/_thumbs/').replace(/\.(?:webp|jpe?g|png)$/, '.webp');
 const GALLERY = {
   'artisanat-stagnovillois': ['images/artisanat%20stagnovillois/DSC08294-Edit_2560x1545.webp', 'images/artisanat%20stagnovillois/DSC08296_1441x2560.webp'],
   'margaux': ['images/margaux/DSC09689.webp', 'images/margaux/DSC09713.webp', 'images/margaux/DSC09831-Edit.webp', 'images/margaux/DSC09868.webp', 'images/margaux/DSC09885.webp', 'images/margaux/DSC09907.webp', 'images/margaux/DSC09923.webp', 'images/margaux/DSC09931.webp', 'images/margaux/DSC09946.webp'],
@@ -3869,6 +3872,10 @@ class Component extends DCLogic {
       const active = i === this.state.detailActiveIdx;
       return {
         src, alt: galleryAlt(i),
+        // The grid shows the light copy (tools/build_thumbs.py), not the
+        // full-size photo; if a copy is missing, the original takes over.
+        thumb: thumbOf(src),
+        onThumbError: (e) => { if (e.currentTarget.src.indexOf('/_thumbs/') !== -1) e.currentTarget.src = src; },
         onHover: () => this.setState({ detailActiveIdx: i }),
         thumbStyle: `position:relative;aspect-ratio:1;overflow:hidden;cursor:pointer;background:${tileBg};opacity:${active ? 1 : 0.6};outline:${active ? `1px solid ${ink}` : 'none'};outline-offset:-1px;`,
         imgStyle: `width:100%;height:100%;object-fit:cover;display:block;`,
