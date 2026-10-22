@@ -3716,15 +3716,18 @@ class Component extends DCLogic {
       : navItemStyle + `font-weight:700;border-bottom:1px solid ${ink};padding-bottom:1px;`; // underlined buttons are bold
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
-    const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
+    // Phone and tablet: the bottom row sits BOTTOM_DROP px lower, close to
+    // Safari's bar; the hint and the bottom fade follow it down.
+    const BOTTOM_DROP = navMobile ? 16 : 0;
+    const searchBtnStyle = `position:fixed;bottom:${24 - BOTTOM_DROP}px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
     // Back-to-the-dial button: the search button's twin, 12 px to its left.
-    const homeBtnStyle = `position:fixed;bottom:24px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
+    const homeBtnStyle = `position:fixed;bottom:${24 - BOTTOM_DROP}px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
     // Édito / Docu filter, bottom left where the compass sat (same corner,
     // same intro fade). Text buttons in the interface face; each button is a
     // 44 px tall touch target, the label inside it carries the styling. The
     // active one is bold and thinly underlined (like the 404 page's « Retour
     // à l'accueil »); while a filter is on, the other one recedes.
-    const filterGroupStyle = `position:fixed;bottom:21px;left:14px;z-index:70;display:flex;align-items:center;gap:2px;` + introStyle(0, 0, 'bar');
+    const filterGroupStyle = `position:fixed;bottom:${21 - BOTTOM_DROP}px;left:14px;z-index:70;display:flex;align-items:center;gap:2px;` + introStyle(0, 0, 'bar');
     const filterBtnStyle = `min-height:44px;min-width:44px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
     const filterTextStyle = (cat) => {
       const on = filter === cat;
@@ -3747,7 +3750,7 @@ class Component extends DCLogic {
     // Below 720 px it would run into the Édito / Docu buttons: it moves up
     // above the bottom row instead.
     const hintAbove = window.innerWidth < 720;
-    const hintStyle = `position:fixed;left:50%;bottom:${hintAbove ? 82 : 34}px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
+    const hintStyle = `position:fixed;left:50%;bottom:${(hintAbove ? 82 : 34) - BOTTOM_DROP}px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
       `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.5;letter-spacing:0.08em;color:${inkFaint};` +
       `width:max-content;max-width:calc(100vw - ${hintAbove ? 48 : 140}px);text-align:center;white-space:pre-line;` +
       `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;` +
@@ -3764,7 +3767,7 @@ class Component extends DCLogic {
     const navFadeSolid = navMobile ? 64 : navStacked ? 78 : 62, navFadeLen = 44;
     const navFadeStyle = `position:fixed;top:0;left:0;right:0;height:${navFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
       `background:linear-gradient(to bottom, ${bg} 0, ${bg} ${navFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
-    const bottomFadeSolid = 68;
+    const bottomFadeSolid = 68 - BOTTOM_DROP;
     const bottomFadeStyle = `position:fixed;bottom:0;left:0;right:0;height:${bottomFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
       `background:linear-gradient(to top, ${bg} 0, ${bg} ${bottomFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
