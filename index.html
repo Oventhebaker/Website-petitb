@@ -830,9 +830,10 @@ const IS_TOUCH_SCREEN = typeof window.matchMedia === 'function' && window.matchM
 // while the view moves. LOD_ZOOM_OUT / _IN: a little apart, so hovering
 // right at the threshold doesn't make them flicker.
 const LOD_ZOOM_OUT = 0.38, LOD_ZOOM_IN = 0.42;
-// How long the camera stays still before the world drops its moving layer
-// (see componentDidUpdate).
-const MOVING_IDLE_MS = 200;
+// NB: the world must never get its own compositing layer (will-change:
+// transform / translate3d). It is 6000×6000 px: iOS then holds a bitmap of
+// its whole surface — hundreds of MB at the home zoom on a 3× screen — and
+// kills the page ("Un problème récurrent est survenu", October 2026).
 const CONTENT_HALF_W = 5 * 480 + 130 + 40;
 
 // ── WebKit rendering path ────────────────────────────────────────────────
@@ -1133,7 +1134,6 @@ class Component extends DCLogic {
     // homeZoom() below.
     zoom: this.homeZoom(),
     dragging: false, lastX: 0, lastY: 0, navigating: false,
-    moving: false,    // the camera moved in the last MOVING_IDLE_MS (see componentDidUpdate)
     detail: null, detailIdx: 0, detailActiveIdx: 0, searchOpen: false, searchQuery: '',
     // Second-layer easter egg — see GENESIS_SCROLL's own comment. Sits on
     // top of the manifesto scroll (doesn't touch `detail`), so closing it
@@ -1744,7 +1744,6 @@ class Component extends DCLogic {
 
   componentWillUnmount() {
     if (this._panRaf) cancelAnimationFrame(this._panRaf);
-    clearTimeout(this._movingTimer);
     window.removeEventListener('keydown', this._onGalleryKey);
     this._introCleanup();
     if (this._hintDone) { clearTimeout(this._hintTimer); for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) window.removeEventListener(type, this._hintDone, { capture: true }); }
@@ -1771,20 +1770,6 @@ class Component extends DCLogic {
     // is open. Single choke point for every open path — canvas card,
     // search result, "← Retour", and browser back/forward.
     this._syncRoute();
-    // The camera moved (drag, pinch, wheel, momentum, a glide): the world
-    // gets its own layer until it has been still for MOVING_IDLE_MS. Safari
-    // then moves and scales the picture it already has instead of redrawing
-    // every photo and text at each step — the zoom, especially, used to be
-    // redrawn in full at every frame — and redraws once, sharp, at rest.
-    // Only while moving: kept on for good, the layer would hold memory for
-    // nothing (the pattern from github.com/andreabuttarelli/feega/pull/553).
-    const { camX, camY, zoom } = this.state;
-    if (camX !== this._prevCamX || camY !== this._prevCamY || zoom !== this._prevZoom) {
-      this._prevCamX = camX; this._prevCamY = camY; this._prevZoom = zoom;
-      if (!this.state.moving) this.setState({ moving: true });
-      clearTimeout(this._movingTimer);
-      this._movingTimer = setTimeout(() => this.setState({ moving: false }), MOVING_IDLE_MS);
-    }
   }
 
   // ---- Momentum -------------------------------------------------------
@@ -3428,7 +3413,7 @@ class Component extends DCLogic {
     const dimFor = (cat) => (filter && cat !== filter ? FILTER_DIM : 1);
     const filterFade = `opacity ${FILTER_FADE_MS}ms ease`;
 
-    const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;${this.state.moving ? 'will-change:transform;' : ''}transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
+    const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
 
     // Sign
     const armLen = 76;
