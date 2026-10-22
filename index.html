@@ -183,6 +183,13 @@
     /* Each canvas piece fades in from 0 to its own resting opacity (no "to"
        frame), delayed by its distance from the cross — see introStyle. */
     @keyframes pb-intro-in { from { opacity: 0; } }
+    /* Gallery arrows (project page): a hairline chevron, no backdrop. White
+       stroke + difference blend = dark on the white page, light over a dark
+       photo. Quiet by default, full only on hover; a little firmer on touch
+       screens, which have no hover. */
+    .pb-gallery-arrow { opacity: 0.45; transition: opacity 250ms ease; mix-blend-mode: difference; }
+    .pb-gallery-arrow:hover, .pb-gallery-arrow:focus-visible { opacity: 1; }
+    @media (hover: none) { .pb-gallery-arrow { opacity: 0.6; } }
     /* The canvas dial (a full-quality still) starts exactly as soft as the
        film's last frame (H.264 video), then comes into focus — see
        INTRO_FOCUS_*; without it the hand-off showed as a sudden sharpening. */
@@ -396,7 +403,7 @@
         <div style="{{detailLeftStyle}}">
           <div style="{{detailThumbGridStyle}}">
             <sc-for list="{{detailThumbs}}" as="t" hint-placeholder-count="9">
-              <div onMouseEnter="{{t.onHover}}" style="{{t.thumbStyle}}">
+              <div onMouseEnter="{{t.onHover}}" onClick="{{t.onHover}}" style="{{t.thumbStyle}}">
                 <img src="{{t.src}}" alt="{{t.alt}}" style="{{t.imgStyle}}"></img>
               </div>
             </sc-for>
@@ -404,9 +411,13 @@
           <div style="{{detailCreditsStyle}}">{{ detailCredits }}</div>
         </div>
         <div style="{{detailMainStyle}}">
-          <div style="{{detailImgWrapStyle}}">
+          <div style="{{detailImgWrapStyle}}" onPointerDown="{{detailSwipeStart}}" onPointerUp="{{detailSwipeEnd}}">
             <sc-if value="{{detailActiveSrc}}" hint-placeholder-val="{{ '' }}">
               <img id="pb-detail-active-img" src="{{detailActiveSrc}}" alt="{{detailActiveAlt}}" style="{{detailImgStyle}}"></img>
+            </sc-if>
+            <sc-if value="{{detailHasMany}}" hint-placeholder-val="{{ false }}">
+              <button class="pb-gallery-arrow" onClick="{{detailPrev}}" style="{{detailPrevStyle}}" aria-label="Image précédente"><svg width="9" height="18" viewBox="0 0 9 18" style="display:block;"><path d="M8 1 L1 9 L8 17" fill="none" stroke="#FFFFFF" stroke-width="0.9"></path></svg></button>
+              <button class="pb-gallery-arrow" onClick="{{detailNext}}" style="{{detailNextStyle}}" aria-label="Image suivante"><svg width="9" height="18" viewBox="0 0 9 18" style="display:block;"><path d="M1 1 L8 9 L1 17" fill="none" stroke="#FFFFFF" stroke-width="0.9"></path></svg></button>
             </sc-if>
             <sc-if value="{{detailNoImage}}" hint-placeholder-val="{{ false }}">
               <div style="{{detailPlaceholderStyle}}">{{ detailPh }}</div>
@@ -1076,6 +1087,16 @@ class Component extends DCLogic {
   };
 
   componentDidMount() {
+    // ← / → page through the open project's images (not while typing).
+    this._onGalleryKey = (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      if (!this.state.detail || this.state.searchOpen || this.state.genesisOpen) return;
+      const t = e.target && e.target.tagName;
+      if (t === 'INPUT' || t === 'TEXTAREA') return;
+      e.preventDefault();
+      this._stepDetailImage(e.key === 'ArrowRight' ? 1 : -1);
+    };
+    window.addEventListener('keydown', this._onGalleryKey);
     if (this.state.intro) this._startIntroWhenVisible();
     else this._armHint();
     // Two-finger trackpad pan and Ctrl+wheel/pinch zoom both arrive as wheel
@@ -1608,6 +1629,7 @@ class Component extends DCLogic {
   }
 
   componentWillUnmount() {
+    window.removeEventListener('keydown', this._onGalleryKey);
     this._introCleanup();
     if (this._hintDone) { clearTimeout(this._hintTimer); for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) window.removeEventListener(type, this._hintDone, { capture: true }); }
     window.removeEventListener('wheel', this._onWheel);
@@ -1752,6 +1774,15 @@ class Component extends DCLogic {
     const zx = window.innerWidth / (2 * t.halfW * FIT_MARGIN);
     const zy = window.innerHeight / (2 * t.halfH * FIT_MARGIN);
     return Math.max(this.minZoom(), Math.min(1, zx, zy));
+  }
+
+  // Project gallery: previous / next image (arrows, ← → keys, swipe),
+  // wrapping around at both ends.
+  _stepDetailImage(dir) {
+    const p = this._currentDetailProject();
+    const n = p && p.gallery ? p.gallery.length : 0;
+    if (n < 2) return;
+    this.setState({ detailActiveIdx: (this.state.detailActiveIdx + dir + n) % n });
   }
 
   // Édito / Docu filter: a click on a category frames its cards and dims
@@ -3623,7 +3654,25 @@ class Component extends DCLogic {
     });
 
     const detailMainStyle = `display:flex;flex-direction:column;align-items:center;`;
-    const detailImgWrapStyle = `display:flex;align-items:center;justify-content:center;width:100%;min-height:200px;`;
+    const detailImgWrapStyle = `position:relative;display:flex;align-items:center;justify-content:center;width:100%;min-height:200px;touch-action:pan-y;`;
+    // Previous / next arrows, over the image's left and right edges: a
+    // hairline chevron with no backdrop (see .pb-gallery-arrow for its quiet
+    // opacity and difference blend), inside a 44 px touch target. Hidden for
+    // a single-image project.
+    const detailHasMany = !!dItem && dItem.gallery.length > 1;
+    const detailArrowStyle = (side) => `position:absolute;top:50%;${side}:0;transform:translateY(-50%);width:44px;height:44px;display:flex;align-items:center;justify-content:center;` +
+      `border:none;background:none;cursor:pointer;padding:0;outline-offset:-6px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
+    const detailPrevStyle = detailArrowStyle('left'), detailNextStyle = detailArrowStyle('right');
+    const detailPrev = (e) => { if (e) e.stopPropagation(); this._stepDetailImage(-1); };
+    const detailNext = (e) => { if (e) e.stopPropagation(); this._stepDetailImage(1); };
+    // Swipe on the large image (touch): a clear horizontal flick pages.
+    const detailSwipeStart = (e) => { if (e.pointerType !== 'mouse') this._swipe = { x: e.clientX, y: e.clientY }; };
+    const detailSwipeEnd = (e) => {
+      const s0 = this._swipe; this._swipe = null;
+      if (!s0) return;
+      const dx = e.clientX - s0.x, dy = e.clientY - s0.y;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > 1.5 * Math.abs(dy)) this._stepDetailImage(dx < 0 ? 1 : -1);
+    };
     const detailActiveSrc = dItem ? (dItem.gallery[this.state.detailActiveIdx] || dItem.src) : undefined;
     const detailActiveAlt = dItem ? (dItem.gallery[this.state.detailActiveIdx] ? galleryAlt(this.state.detailActiveIdx) : dItem.title + ' — Petit Bouquetin') : '';
     const detailNoImage = !!dItem && !detailActiveSrc;
@@ -3670,7 +3719,7 @@ class Component extends DCLogic {
       genesisOverlayStyle, genesisCloseStyle, genesisColStyle, genesisEntries,
       detailOverlayStyle, detailCloseStyle, detailGridStyle,
       detailLeftStyle, detailCreditsStyle, detailCredits, detailThumbGridStyle, detailThumbs,
-      detailMainStyle, detailImgWrapStyle, detailImgStyle, detailActiveAlt, detailActiveSrc, detailNoImage, detailPlaceholderStyle,
+      detailHasMany, detailPrevStyle, detailNextStyle, detailPrev, detailNext, detailSwipeStart, detailSwipeEnd, detailMainStyle, detailImgWrapStyle, detailImgStyle, detailActiveAlt, detailActiveSrc, detailNoImage, detailPlaceholderStyle,
       detailCapStyle, detailCodeStyle, detailTitleStyle,
       detailIntentionsStyle, detailIntentionsParas,
       detailPh: dItem ? dItem.code + ' — ' + dItem.title : '',
