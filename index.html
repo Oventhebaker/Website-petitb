@@ -1016,7 +1016,7 @@ const DECOR = [
   // cover) linking out to Spotify. `href` is what marks it — gridLayout
   // passes it through and renderVals pulls it OUT of the plain decor <img>
   // loop into its own <a> element (see vinylItem).
-  { src: 'images/objet%20Image%20site/brett-jordan-SssdoXhhtJw-unsplash-Recovered_1800x1819.webp', w: 1800, h: 1819, temp: 'cool', round: true, dark: true,
+  { src: 'images/objet%20Image%20site/brett-jordan-SssdoXhhtJw-unsplash-Recovered_600x606.webp', w: 600, h: 606, temp: 'cool', round: true, dark: true,
     href: 'https://open.spotify.com/playlist/6XvzCCYHBxkwEbun7Y7sXr?si=Ey7hs3-PTQSzccS_dGkcZg' },
 ];
 
@@ -1731,7 +1731,7 @@ class Component extends DCLogic {
   }
 
   componentWillUnmount() {
-    clearTimeout(this._returnTimer);
+    if (this._panRaf) cancelAnimationFrame(this._panRaf);
     window.removeEventListener('keydown', this._onGalleryKey);
     this._introCleanup();
     if (this._hintDone) { clearTimeout(this._hintTimer); for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) window.removeEventListener(type, this._hintDone, { capture: true }); }
@@ -2081,6 +2081,22 @@ class Component extends DCLogic {
     return delta > Math.max(originDist, 1) * PINCH_ACTIVATE_RATIO;
   };
 
+  // Pans are gathered between two frames and applied in ONE render, at the
+  // frame. An iPhone's 120 Hz screen sends two pointer moves per frame, and
+  // each one re-rendered the whole canvas; every other camera write
+  // (pinch zoom, momentum, a new gesture) flushes what's pending first.
+  _panBy = (dx, dy) => {
+    this._panDX = (this._panDX || 0) + dx;
+    this._panDY = (this._panDY || 0) + dy;
+    if (!this._panRaf) this._panRaf = requestAnimationFrame(this._flushPan);
+  };
+  _flushPan = () => {
+    if (this._panRaf) { cancelAnimationFrame(this._panRaf); this._panRaf = null; }
+    const dx = this._panDX || 0, dy = this._panDY || 0;
+    this._panDX = this._panDY = 0;
+    if (dx || dy) this.setState(s => ({ camX: s.camX - dx / s.zoom, camY: s.camY - dy / s.zoom }));
+  };
+
   onDown = (e) => {
     // Same guard as handleWheel, and for the same reason: with an overlay
     // (search / project detail) open, the whole viewport is that overlay —
@@ -2095,6 +2111,7 @@ class Component extends DCLogic {
     // to extend mid-drag. Text selection needs the browser's default
     // mousedown/mousemove behavior left completely alone.
     if (this.state.detail || this.state.searchOpen || this.state.soonPage) return;
+    this._flushPan();
     this._stopMomentum();
     this._cancelGlideHome(); // a real gesture takes over from a compass return-to-center glide
 
@@ -2153,6 +2170,7 @@ class Component extends DCLogic {
     this._downX = e.clientX;
     this._downY = e.clientY;
     this._dragMoves = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
+    this._lastX = e.clientX; this._lastY = e.clientY;
     this.setState({ dragging: true, navigating: false, lastX: e.clientX, lastY: e.clientY });
   };
   onMove = (e) => {
@@ -2182,7 +2200,7 @@ class Component extends DCLogic {
         // zoom is untouched here, deliberately no call to zoomAt or write
         // to state.zoom anywhere in this branch.
         const dx = mid.x - this._twoFingerLastMid.x, dy = mid.y - this._twoFingerLastMid.y;
-        if (dx || dy) this.setState(s => ({ camX: s.camX - dx / s.zoom, camY: s.camY - dy / s.zoom }));
+        if (dx || dy) this._panBy(dx, dy);
       }
       this._twoFingerLastMid = mid;
       return;
@@ -2214,6 +2232,7 @@ class Component extends DCLogic {
         // drifting at once) track smoothly frame to frame instead of
         // drifting away from where the fingers actually are.
         const targetZoom = this._pinchOrigin.zoom * dist / this._pinchOrigin.dist;
+        this._flushPan();
         this.zoomAt(targetZoom / this.state.zoom, mid.x, mid.y);
         const dx = mid.x - this._pinchLastMid.x, dy = mid.y - this._pinchLastMid.y;
         if (dx || dy) this.setState(s => ({ camX: s.camX - dx / s.zoom, camY: s.camY - dy / s.zoom }));
@@ -2242,8 +2261,9 @@ class Component extends DCLogic {
       try { e.currentTarget.setPointerCapture(this._pointerId); } catch (err) {}
       this._captured = true;
     }
-    const dx = e.clientX - this.state.lastX, dy = e.clientY - this.state.lastY;
-    this.setState(s => ({ camX: s.camX - dx / s.zoom, camY: s.camY - dy / s.zoom, lastX: e.clientX, lastY: e.clientY }));
+    const dx = e.clientX - this._lastX, dy = e.clientY - this._lastY;
+    this._lastX = e.clientX; this._lastY = e.clientY;
+    this._panBy(dx, dy);
     // Rolling ~80ms window of samples, just enough to get a release
     // velocity from the tail of the motion rather than the whole drag
     // (which would blend in any pause right before letting go).
@@ -2261,6 +2281,7 @@ class Component extends DCLogic {
   // gesture system" pattern — onUp/onCancel differ only in whether the
   // final release is allowed to launch a momentum flick.
   _endPointer = (e, { allowMomentum }) => {
+    this._flushPan(); // what's left of the gesture lands before momentum / hand-off read the camera
     // Covers both two-finger states — a lifted finger collapses either
     // 'twoFingerPending' or an already-escalated 'pinch' the same way
     // (hand off to single-finger pan, or reinit on a 3rd finger — see
@@ -2308,6 +2329,7 @@ class Component extends DCLogic {
       this._downX = pt.x;
       this._downY = pt.y;
       this._dragMoves = [{ x: pt.x, y: pt.y, t: performance.now() }];
+      this._lastX = pt.x; this._lastY = pt.y;
       this.setState({ dragging: true, navigating: false, lastX: pt.x, lastY: pt.y });
       return;
     }
@@ -3314,9 +3336,17 @@ class Component extends DCLogic {
     // edge of the view: the piece eases out over the last WRAP_FADE px before
     // it switches and eases back in on the other side (`fade`, smoothstep) —
     // a thin band at the very edge, never a pop.
-    const WRAP_FADE = 160;
+    // Only a piece that can actually be seen fades: off screen (beyond the
+    // view by more than a piece's size, OFFSCREEN_MARGIN) it stays opaque.
+    // At most zooms the switch happens far off screen, and fading those
+    // pieces anyway changed the opacity of whole columns of them on every
+    // frame of a pan — Safari re-composited them each time and the pan
+    // stuttered (measured in the iOS simulator: 17 of 132 frames over 20 ms).
+    const WRAP_FADE = 160, OFFSCREEN_MARGIN = 700;
+    const viewHalfW = window.innerWidth / (2 * zoom) + OFFSCREEN_MARGIN, viewHalfH = window.innerHeight / (2 * zoom) + OFFSCREEN_MARGIN;
     const wrapAt = (cx, cy) => {
       const ox = WRAP_W * Math.round((dispX - cx) / WRAP_W), oy = WRAP_H * Math.round((dispY - cy) / WRAP_H);
+      if (Math.abs(cx + ox - dispX) > viewHalfW || Math.abs(cy + oy - dispY) > viewHalfH) return { ox, oy, fade: 1 };
       const near = Math.max(
         Math.abs(cx + ox - dispX) - (WRAP_W / 2 - WRAP_FADE),
         Math.abs(cy + oy - dispY) - (WRAP_H / 2 - WRAP_FADE), 0);
