@@ -1212,9 +1212,8 @@ class Component extends DCLogic {
     // touchmove is claimed for ONE finger too, not just two: a single-finger
     // vertical drag on the canvas made iOS Safari collapse/expand its address
     // bar instead of panning — iOS doesn't honour touch-action:none (see
-    // appStyle) for its own toolbar gestures. Claiming the MOVE (never the
-    // touchstart, for one finger — that would stop taps from producing a
-    // click, and cards could no longer be opened) keeps the pan on the canvas.
+    // appStyle) for its own toolbar gestures. (One finger is now claimed at
+    // touchstart as well — see _onTouchStart / _onTouchEnd above.)
     // For two fingers it also keeps iOS's system gesture from reasserting
     // itself mid-gesture on the rare event touchstart didn't fully deter it.
     // Skipped while an overlay is open, so project pages / search still scroll.
@@ -1223,6 +1222,17 @@ class Component extends DCLogic {
       if (e.touches.length >= 1) e.preventDefault();
     };
     this._canvasEl.addEventListener('touchmove', this._onTouchMove, { passive: false });
+    // Since iOS 15, preventDefault() on touchmove alone no longer stops
+    // Safari's pan (the one that shrinks / reveals the toolbar) — what does
+    // is preventDefault() on pointermove (pqina.nl, "How To Prevent
+    // Scrolling The Page On iOS Safari 15"). React's onPointerMove can't be
+    // trusted to be non-passive, so — like the touch listeners above — a
+    // plain listener on the canvas, touch pointers only, overlays excluded.
+    this._onPointerMoveBlock = (e) => {
+      if (e.pointerType !== 'touch' || this.state.detail || this.state.searchOpen || this.state.soonPage) return;
+      e.preventDefault();
+    };
+    this._canvasEl.addEventListener('pointermove', this._onPointerMoveBlock, { passive: false });
     // The camera-centered magnify effect (see renderVals' tileScale)
     // depends on window.innerWidth/innerHeight for its radius, so a
     // resize needs to trigger a re-render — a resize alone doesn't touch
@@ -1720,6 +1730,7 @@ class Component extends DCLogic {
       this._canvasEl.removeEventListener('touchstart', this._onTouchStart);
       this._canvasEl.removeEventListener('touchmove', this._onTouchMove);
       this._canvasEl.removeEventListener('touchend', this._onTouchEnd);
+      this._canvasEl.removeEventListener('pointermove', this._onPointerMoveBlock);
     }
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('contextmenu', this._onContextMenu);
