@@ -2068,6 +2068,19 @@ class Component extends DCLogic {
     this._stopMomentum();
     this._cancelGlideHome(); // a real gesture takes over from a compass return-to-center glide
 
+    // The primary pointer is the first finger on an empty screen (or the
+    // mouse): a brand-new gesture, so anything still tracked is a ghost —
+    // a finger whose lift never reached us (iOS doesn't always deliver it).
+    // Left in, a ghost turned every later pinch into a "third finger",
+    // ignored: one finger still panned, but zooming was dead until reload.
+    if (e.isPrimary && this._pointers.size) {
+      this._pointers.clear();
+      this._pinchOrigin = this._pinchLastMid = this._twoFingerOrigin = this._twoFingerLastMid = null;
+      this._pointerId = null;
+      this._captured = false;
+      this._gesture = 'idle';
+    }
+
     this._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (this._pointers.size === 2) {
