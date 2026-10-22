@@ -9,6 +9,15 @@
      one static file working at any path. Must come before the first
      relative <script> below so that script itself resolves correctly. -->
 <base href="/">
+<script>
+  // iOS toolbar fix: keep --vh equal to the real window height (see the
+  // html, body rule). Set before the first paint, then on every resize.
+  (function () {
+    var setVh = function () { document.documentElement.style.setProperty('--vh', window.innerHeight + 'px'); };
+    setVh();
+    window.addEventListener('resize', setVh);
+  })();
+</script>
 <!-- Home page title/description — keep in sync with SITE_TITLE / SITE_DESC
      in the script (applyHeadFor rewrites these tags, and the canonical /
      Open Graph / Twitter ones below, whenever a project page is open). -->
@@ -143,7 +152,13 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
   <script src="./image-slot.js"></script>
   <style>
-    html, body { margin: 0; padding: 0; overflow: hidden; }
+    /* overscroll-behavior: no rubber-band bounce, no pull-to-refresh.
+       Height: 100% as a fallback, then the iOS trick (pqina.nl): the real
+       window height, synced into --vh (see the <head> script), minus 1 px —
+       a page a pixel shorter than the window gives iOS nothing to scroll, so
+       a vertical swipe can't bring its toolbar back. The canvas itself is
+       position:fixed / inset:0, so it still fills the screen. */
+    html, body { margin: 0; padding: 0; overflow: hidden; overscroll-behavior: none; height: 100%; height: calc(var(--vh, 100%) - 1px); }
     * { box-sizing: border-box; }
     a { text-decoration: none; }
     /* Site-wide deterrent against casual image saving — not a real
@@ -1163,14 +1178,18 @@ class Component extends DCLogic {
       if (e.touches.length === 2) e.preventDefault();
     };
     this._canvasEl.addEventListener('touchstart', this._onTouchStart, { passive: false });
-    // Belt-and-suspenders alongside the touchstart claim above: with
-    // touch-action:none already on the canvas (see appStyle) this is
-    // normally redundant, but keeps iOS's system gesture from reasserting
-    // itself mid-gesture on the rare event it wasn't fully deterred at
-    // touchstart.
+    // touchmove is claimed for ONE finger too, not just two: a single-finger
+    // vertical drag on the canvas made iOS Safari collapse/expand its address
+    // bar instead of panning — iOS doesn't honour touch-action:none (see
+    // appStyle) for its own toolbar gestures. Claiming the MOVE (never the
+    // touchstart, for one finger — that would stop taps from producing a
+    // click, and cards could no longer be opened) keeps the pan on the canvas.
+    // For two fingers it also keeps iOS's system gesture from reasserting
+    // itself mid-gesture on the rare event touchstart didn't fully deter it.
+    // Skipped while an overlay is open, so project pages / search still scroll.
     this._onTouchMove = (e) => {
       if (this.state.detail || this.state.searchOpen || this.state.soonPage) return;
-      if (e.touches.length >= 2) e.preventDefault();
+      if (e.touches.length >= 1) e.preventDefault();
     };
     this._canvasEl.addEventListener('touchmove', this._onTouchMove, { passive: false });
     // The camera-centered magnify effect (see renderVals' tileScale)
