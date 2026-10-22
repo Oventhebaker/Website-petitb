@@ -350,8 +350,9 @@
 
   </div>
 
-  <!-- ============= RETURN VEIL (see _returnHome) ============= -->
-  <div style="{{veilStyle}}"></div>
+  <!-- ============= FADES UNDER THE NAV AND THE BOTTOM BUTTONS (see navFadeStyle) ============= -->
+  <div style="{{navFadeStyle}}"></div>
+  <div style="{{bottomFadeStyle}}"></div>
 
   <!-- ============= FIXED NAV ============= -->
   <nav style="{{navStyle}}">
@@ -1139,7 +1140,6 @@ class Component extends DCLogic {
     introPlain: false,   // no film (poster fallback): the wordmark stays in place
     hint: false,      // navigation hint on screen (see _armHint)
     filter: null,     // 'edito' | 'docu' | null — see toggleFilter
-    veil: false,      // white veil over the canvas during a return to the dial (_returnHome)
   };
 
   componentDidMount() {
@@ -1836,41 +1836,49 @@ class Component extends DCLogic {
   _glideHome = () => this._glideTo(CX, CY, this.homeZoom());
 
   // Back to the dial — the home map's own, the only one (copies have none).
-  // Still on the home map: the usual eased glide. Out in a copy: gliding
-  // across whole periods would be long and would land on a copy's centre,
-  // so instead the canvas whitens (RETURN_VEIL_MS), the camera is set on the
-  // home map a little further out, and it zooms gently in onto the dial while
-  // the white lifts — it reads as coming back to where you started.
+  // Always a visible trip there, never a cut: the camera eases out a little,
+  // travels and settles back in on the dial (_glideTo's arc). From far away
+  // the trip would cross many periods, so first the camera is moved by whole
+  // periods (fold) to the identical spot nearest home that still keeps the
+  // home map out of view — the copies are identical outside the home map,
+  // so that move doesn't show — and the trip starts from there.
   _returnHome = () => {
-    const onHomeMap = Math.abs(this.state.camX - CX) <= WRAP_W / 2 && Math.abs(this.state.camY - CY) <= WRAP_H / 2;
-    if (onHomeMap) { this._glideHome(); return; }
-    const RETURN_VEIL_MS = 260, RETURN_FROM = 0.55; // zoom-in from 55 % of the home zoom
     this._stopMomentum();
     this._cancelGlideHome();
-    clearTimeout(this._returnTimer);
-    this.setState({ veil: true });
-    this._returnTimer = setTimeout(() => {
-      const zT = this.homeZoom();
-      this.setState({ camX: CX, camY: CY, zoom: Math.max(this.minZoom(), zT * RETURN_FROM), navigating: false, dragging: false });
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        this.setState({ veil: false });
-        this._glideTo(CX, CY, zT);
-      }));
-    }, RETURN_VEIL_MS);
+    const z = this.state.zoom;
+    const fold = (d, period, halfView) => {
+      const reach = halfView + period / 2 + 400; // home map's edge + a margin, beyond the screen's edge
+      if (Math.abs(d) <= reach) return d;
+      let r = Math.abs(d) % period;
+      while (r < reach) r += period;
+      return Math.sign(d) * r;
+    };
+    const dx = fold(this.state.camX - CX, WRAP_W, window.innerWidth / (2 * z));
+    const dy = fold(this.state.camY - CY, WRAP_H, window.innerHeight / (2 * z));
+    this.setState({ camX: CX + dx, camY: CY + dy });
+    this._glideTo(CX, CY, this.homeZoom(), { exact: true, arc: true });
   };
   // The same eased glide towards any world point (x, y) and zoom — used by
   // the compass return-to-center (_glideHome) and the Édito / Docu filter.
-  _glideTo = (x, y, zT) => {
+  // exact: go to (x, y) itself rather than its nearest copy. arc: on a long
+  // trip, ease out mid-way (zoom dips) so the travel stays readable instead
+  // of a blur, then back in.
+  _glideTo = (x, y, zT, { exact = false, arc = false } = {}) => {
     this._stopMomentum();
     this._cancelGlideHome();
     const x0 = this.state.camX, y0 = this.state.camY, z0 = this.state.zoom;
     // Shortest wrap-aware target: the (x, y)-equivalent (x + kW) nearest
     // the current camera, so a far-wrapped pan eases the short way there
     // instead of unwinding every wrap.
-    const xT = x + Math.round((x0 - x) / WRAP_W) * WRAP_W;
-    const yT = y + Math.round((y0 - y) / WRAP_H) * WRAP_H;
+    const xT = exact ? x : x + Math.round((x0 - x) / WRAP_W) * WRAP_W;
+    const yT = exact ? y : y + Math.round((y0 - y) / WRAP_H) * WRAP_H;
     if (x0 === xT && y0 === yT && Math.abs(z0 - zT) < 1e-3) return;
-    const DUR = 960; // eased a touch slower than it first shipped — the compass felt hurried
+    // The arc's lowest zoom: the whole trip fits in about 1.5 screens there.
+    // Only ever a dip — a short trip already at a lower zoom gets none.
+    const dist = Math.hypot(xT - x0, yT - y0);
+    const zMid = Math.max(this.minZoom(), Math.min(z0, zT, 1.5 * Math.min(window.innerWidth, window.innerHeight) / Math.max(dist, 1)));
+    const dip = arc ? Math.min(0, Math.log(zMid) - (Math.log(z0) + Math.log(zT)) / 2) : 0;
+    const DUR = dip < 0 ? 1500 : 960; // eased a touch slower than it first shipped — the compass felt hurried
     const t0 = performance.now();
     const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
     this._homing = true;
@@ -1880,7 +1888,8 @@ class Component extends DCLogic {
       this.setState({
         camX: x0 + (xT - x0) * e,
         camY: y0 + (yT - y0) * e,
-        zoom: z0 * Math.pow(zT / z0, e), // geometric — matches how zoom moves everywhere else
+        // geometric — matches how zoom moves everywhere else — plus the arc's dip
+        zoom: z0 * Math.pow(zT / z0, e) * Math.exp(dip * Math.sin(Math.PI * e)),
         navigating: false, dragging: false,
       });
       if (u < 1) {
@@ -1918,12 +1927,11 @@ class Component extends DCLogic {
   }
 
   // Édito / Docu filter: a click on a category frames its cards and dims
-  // everything else; a click on the active one turns the filter off and
-  // glides back to the centre, as the compass used to.
+  // everything else; a click on the active one turns the filter off where
+  // you are (the compass button is what takes you back to the dial).
   toggleFilter = (cat) => {
     if (this.state.filter === cat) {
       this.setState({ filter: null });
-      this._returnHome();
       return;
     }
     this.ALL(); // makes sure _navTargets is computed
@@ -3647,14 +3655,23 @@ class Component extends DCLogic {
     const hintStyle = `position:fixed;left:50%;bottom:${hintAbove ? 82 : 34}px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
       `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.5;letter-spacing:0.08em;color:${inkFaint};` +
       `width:max-content;max-width:calc(100vw - ${hintAbove ? 48 : 140}px);text-align:center;white-space:pre-line;` +
-      `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;`;
+      `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;` +
+      // a soft white halo, so no scale mark behind it runs into the words
+      `background:${bg};box-shadow:0 0 18px 20px ${bg};border-radius:12px;`;
     // Back to the dial: also drops the Édito / Docu filter, so you're truly
     // back where you started.
     const goCenter = () => { if (this.state.filter) this.setState({ filter: null }); this._returnHome(); };
-    // Fades in fast (the jump happens under it), lifts slowly (the zoom-in
-    // onto the dial shows through).
-    const veilStyle = `position:fixed;inset:0;z-index:55;pointer-events:none;background:${bg};` +
-      `opacity:${this.state.veil ? 1 : 0};transition:opacity ${this.state.veil ? 240 : 700}ms ease;`;
+    // Under the top bar: white behind the wordmark and links, fading out
+    // below them — whatever slides up under the bar (photos, marks) fades
+    // away softly instead of running into the letters. The same along the
+    // bottom, behind Édito / Docu and the round buttons (their top edge is
+    // 65 px up).
+    const navFadeSolid = navNarrow ? 78 : 62, navFadeLen = 44;
+    const navFadeStyle = `position:fixed;top:0;left:0;right:0;height:${navFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
+      `background:linear-gradient(to bottom, ${bg} 0, ${bg} ${navFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
+    const bottomFadeSolid = 68;
+    const bottomFadeStyle = `position:fixed;bottom:0;left:0;right:0;height:${bottomFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
+      `background:linear-gradient(to top, ${bg} 0, ${bg} ${bottomFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
     const closeSearch = () => this.setState({ searchOpen: false });
 
@@ -3966,7 +3983,7 @@ class Component extends DCLogic {
       goEdito, goDocu, goPoesie, goManifeste, axisTicks,
       fillerItems, editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, textItems,
       navStyle, navGroupLeftStyle, navGroupRightStyle, navItemStyle, openManifesto, openNewsletter, openBoutique, soonOpen, closeSoon, soonTitle, soonColStyle, soonTitleStyle, soonNoteStyle, brandStyle, brandPickerOpen, closeBrandPicker, brandPickerStyle, brandPickerHeadStyle, brandPickerCloseStyle, brandOptions, contactStyle, contactLabel, copyEmail: this.copyEmail,
-      veilStyle, homeBtnStyle, searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
+      navFadeStyle, bottomFadeStyle, homeBtnStyle, searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
       filterGroupStyle, filterEdito, filterDocu, filterEditoBtnStyle, filterDocuBtnStyle, filterEditoTextStyle, filterDocuTextStyle, filterEditoPressed, filterDocuPressed, filterEditoLabel, filterDocuLabel,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
