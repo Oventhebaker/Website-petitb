@@ -7,39 +7,166 @@
 <meta name="robots" content="noindex">
 <link rel="icon" type="image/png" href="/images/miscellaneous/flavicon.png">
 <link rel="stylesheet" href="https://use.typekit.net/pwp0pwm.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<!--
+  Served by Cloudflare Pages for any address that doesn't exist, at that
+  address — so every URL here is absolute (/images/…, /fonts/…).
+  The page looks like the site's own home view, except the dial is broken:
+  it sits where the real one sits on the canvas (centre of the screen) and
+  at the same size (see sizeDial below), and clicking it "repairs" it —
+  back to the home page.
+-->
 <style>
-  :root { color-scheme: dark; }
-  html, body {
-    margin: 0; padding: 0; height: 100%;
-    background: #000000;
-    color: rgba(205,221,240,0.88);
-    font-family: 'prestige-elite-std', monospace;
+  @font-face {
+    font-family: 'Picaflor';
+    src: url('/fonts/Picaflor-12pt.woff2') format('woff2');
+    font-weight: 400; font-style: normal; font-display: swap;
   }
-  body {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 28px; min-height: 100vh; padding: 32px; box-sizing: border-box; text-align: center;
+  :root {
+    --ink: #000000;
+    --ink-faint: rgba(0,0,0,0.5);
+    --bg: #FFFFFF;
+    --body: 'prestige-elite-std', monospace;
   }
-  .cross { color: rgba(205,221,240,0.6); }
-  .cross line { vector-effect: non-scaling-stroke; }
-  .message {
-    font-size: 16px; line-height: 1.6; margin: 0;
-    color: rgba(205,221,240,0.88);
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  * { box-sizing: border-box; }
+  a { color: inherit; text-decoration: none; }
+
+  /* Top bar — same as the site's (index.html, navStyle / navItemStyle). */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 22px 32px;
   }
-  a.home {
-    font-size: 13px; letter-spacing: 0.1em; text-transform: uppercase;
-    font-weight: 700;
-    color: rgba(205,221,240,0.7); text-decoration: none;
-    border-bottom: 1px solid rgba(205,221,240,0.4); padding-bottom: 3px;
+  nav .group { display: flex; align-items: center; gap: 28px; }
+  nav .left { justify-self: start; }
+  nav .right { justify-self: end; }
+  nav .item {
+    font-family: var(--body); font-size: 13px; letter-spacing: 0.14em;
+    text-transform: uppercase; white-space: nowrap;
   }
-  a.home:hover { color: rgba(205,221,240,0.95); border-bottom-color: rgba(205,221,240,0.7); }
+  nav .contact { font-weight: 700; border-bottom: 1px solid var(--ink); padding-bottom: 1px; }
+  nav .brand {
+    margin: 0; font-family: 'Picaflor', 'prestige-elite-std', monospace;
+    font-size: 16px; letter-spacing: 0.08em; font-weight: 400; white-space: nowrap;
+  }
+  @media (max-width: 759px) {
+    nav {
+      grid-template-columns: 1fr auto; grid-template-areas: "brand brand" "left right";
+      row-gap: 12px; justify-items: center; padding: 16px 16px 0;
+    }
+    nav .brand { grid-area: brand; }
+    nav .left { grid-area: left; }
+    nav .right { grid-area: right; }
+    nav .group { gap: 12px; }
+    nav .item { font-size: 11px; letter-spacing: 0.08em; }
+  }
+
+  /* Three bands: what's above the dial, the dial, what's below. The two
+     outer bands share the leftover height equally, so the dial sits at the
+     centre of the screen, as on the canvas. */
+  main {
+    min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+    padding: 96px 24px; text-align: center; /* symmetric: the bands stay equal */
+  }
+  .above, .below { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; width: 100%; }
+  .above { justify-content: flex-end; padding-bottom: 28px; }
+  .below { justify-content: flex-start; padding-top: 18px; }
+
+  .code {
+    font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700; letter-spacing: 0.32em;
+    text-transform: uppercase; color: var(--ink-faint); margin: 0;
+  }
+
+  /* The broken dial. Its box is the photo's full 800×800 frame (fragments
+     included); sizeDial() sets its width so the disc matches the real dial. */
+  .dial {
+    display: block; line-height: 0; cursor: pointer; border-radius: 50%;
+    transition: transform 400ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* The photo's background is a flat 254, a hair darker than the page's
+     255 — enough to show as a faint square. +1.2 % brightness lifts it to
+     pure white (invisible on the bronze); multiply melts any rest away. */
+  .dial img { width: 100%; height: auto; display: block; filter: brightness(1.012); mix-blend-mode: multiply; -webkit-user-drag: none; user-select: none; }
+  .dial:hover { transform: rotate(-4deg) scale(1.03); }
+  .dial:focus-visible { outline: 1px solid var(--ink); outline-offset: 6px; }
+
+  .hint {
+    font-family: var(--body); font-size: 12px; letter-spacing: 0.08em;
+    color: var(--ink-faint); margin: 0 0 34px;
+  }
+  .quote {
+    font-family: var(--body); font-style: italic; font-size: 15px; line-height: 1.7;
+    max-width: 34em; margin: 0;
+  }
+  @media (max-width: 759px) {
+    main { padding-top: 110px; padding-bottom: 110px; }
+    .quote { font-size: 14px; }
+  }
 </style>
 </head>
 <body>
-  <svg class="cross" width="132" height="132" viewBox="0 0 132 132" aria-hidden="true">
-    <line x1="4" y1="66" x2="128" y2="66" stroke="currentColor" stroke-width="1"></line>
-    <line x1="66" y1="4" x2="66" y2="128" stroke="currentColor" stroke-width="1"></line>
-  </svg>
-  <p class="message">Cette page n’existe pas.</p>
-  <a class="home" href="/">← Retour à l’accueil</a>
+  <nav>
+    <div class="group left">
+      <a class="item" href="/projets/m-petit-bouquetin">Manifeste</a>
+      <a class="item" href="/projets/m-newsletter">Newsletter</a>
+    </div>
+    <a class="brand" href="/">Petit Bouquetin</a>
+    <div class="group right">
+      <a class="item" href="/">Boutique</a>
+      <a class="item contact" id="contact" href="/">Contact</a>
+    </div>
+  </nav>
+
+  <main>
+    <div class="above">
+      <p class="code">Erreur 404</p>
+    </div>
+
+    <a class="dial" id="dial" href="/" aria-label="Réparer le cadran — retour à l’accueil">
+      <img src="/images/objet%20Image%20site/404.webp" alt="Le cadran solaire de Petit Bouquetin, brisé en morceaux" width="800" height="800">
+    </a>
+
+    <div class="below">
+      <p class="hint">Cliquer sur le cadran pour le réparer</p>
+      <p class="quote">Notre petit bouquetin a accidentellement brisé le cadran solaire, et cette page a glissé hors du temps.</p>
+    </div>
+  </main>
+
+<script>
+  // Same size as the dial on the site's home view — the same rule as
+  // homeZoom() in index.html: frame the first scale marks
+  // (min(W / 2·560, H / 2·550)), then zoom in just enough to keep every
+  // card, curio and text block out of view. Only four pieces ever bind that
+  // second rule: their clear gaps (dx, dy) to the centre, in world px, minus
+  // homeZoom's 24 px margin — measured on the current layout. Re-measure
+  // them if the canvas layout changes (a piece added or moved near the
+  // centre). On the canvas the dial's disc is ≈ 130.5 world px wide; in this
+  // photo the broken disc spans ≈ 470 of its 800 px.
+  var NEAREST = [[-24, 1228], [348, 788], [828, 211], [1308, -24]];
+  function sizeDial() {
+    var W = window.innerWidth, H = window.innerHeight;
+    var zoom = Math.min(W / (2 * 560), H / (2 * 550));
+    NEAREST.forEach(function (g) {
+      var keepOut = Math.min(g[0] > 0 ? W / (2 * g[0]) : Infinity, g[1] > 0 ? H / (2 * g[1]) : Infinity);
+      if (isFinite(keepOut)) zoom = Math.max(zoom, keepOut);
+    });
+    zoom = Math.max(0.15, W / (2 * 2570), Math.min(10, zoom)); // the canvas's zoom-out floor
+    var disc = 130.5 * zoom;
+    var dial = document.getElementById('dial');
+    var w = Math.round(disc * 800 / 470);
+    dial.style.width = w + 'px';
+    // The disc sits a little above the photo's middle (centre at 374.5 of
+    // 800): push the frame down by that much so the DISC is on the centre.
+    dial.style.marginTop = Math.round(2 * w * (400 - 374.5) / 800) + 'px';
+  }
+  sizeDial();
+  window.addEventListener('resize', sizeDial);
+  // Built here rather than written as a mailto: link, so Cloudflare's email
+  // obfuscation (which rewrites mailto: links in static HTML) leaves it alone.
+  document.getElementById('contact').href = 'mailto:' + ['petitbouquetin.media', 'gmail.com'].join('@');
+</script>
 </body>
 </html>

@@ -183,13 +183,14 @@
     /* Each canvas piece fades in from 0 to its own resting opacity (no "to"
        frame), delayed by its distance from the cross — see introStyle. */
     @keyframes pb-intro-in { from { opacity: 0; } }
-    /* Gallery arrows (project page): a hairline chevron, no backdrop. White
-       stroke + difference blend = dark on the white page, light over a dark
-       photo. Quiet by default, full only on hover; a little firmer on touch
-       screens, which have no hover. */
-    .pb-gallery-arrow { opacity: 0.45; transition: opacity 250ms ease; mix-blend-mode: difference; }
+    /* Gallery arrows (project page): a hairline ink chevron over a slightly
+       wider white one — no backdrop, yet it reads on the white page and over
+       a dark photo alike, in every browser (a white stroke in mix-blend-mode:
+       difference didn't show in Safari). Quiet by default, full on hover;
+       firmer on touch screens, which have no hover. */
+    .pb-gallery-arrow { opacity: 0.55; transition: opacity 250ms ease; }
     .pb-gallery-arrow:hover, .pb-gallery-arrow:focus-visible { opacity: 1; }
-    @media (hover: none) { .pb-gallery-arrow { opacity: 0.6; } }
+    @media (hover: none) { .pb-gallery-arrow { opacity: 0.7; } }
     /* The canvas dial (a full-quality still) starts exactly as soft as the
        film's last frame (H.264 video), then comes into focus — see
        INTRO_FOCUS_*; without it the hand-off showed as a sudden sharpening. */
@@ -276,6 +277,19 @@
       </a>
     </sc-for>
 
+    <!-- Filler cards: the copies' cross and centre, filled with projects
+         (hidden on the home map — see _fillers in ALL()) -->
+    <sc-for list="{{fillerItems}}" as="p" hint-placeholder-count="25">
+      <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
+        <div class="pb-mag-shadow" style="{{p.shadowStyle}}"></div>
+        <div style="{{p.imgBoxStyle}}"><image-slot id="{{p.slot}}" shape="rect" fit="cover" placeholder="{{p.ph}}" src="{{p.src}}" alt="{{p.alt}}"></image-slot></div>
+        <div style="{{p.capStyle}}">
+          <span style="{{p.codeStyle}}">{{ p.code }}</span>
+          <span style="{{p.titleStyle}}">{{ p.title }}</span>
+        </div>
+      </a>
+    </sc-for>
+
     <!-- Docu zone -->
     <sc-for list="{{docuItems}}" as="p" hint-placeholder-count="5">
       <a href="#" onClick="{{p.open}}" style="{{p.wrapStyle}}">
@@ -313,6 +327,9 @@
     </sc-for>
 
   </div>
+
+  <!-- ============= RETURN VEIL (see _returnHome) ============= -->
+  <div style="{{veilStyle}}"></div>
 
   <!-- ============= FIXED NAV ============= -->
   <nav style="{{navStyle}}">
@@ -416,8 +433,8 @@
               <img id="pb-detail-active-img" src="{{detailActiveSrc}}" alt="{{detailActiveAlt}}" style="{{detailImgStyle}}"></img>
             </sc-if>
             <sc-if value="{{detailHasMany}}" hint-placeholder-val="{{ false }}">
-              <button class="pb-gallery-arrow" onClick="{{detailPrev}}" style="{{detailPrevStyle}}" aria-label="Image précédente"><svg width="9" height="18" viewBox="0 0 9 18" style="display:block;"><path d="M8 1 L1 9 L8 17" fill="none" stroke="#FFFFFF" stroke-width="0.9"></path></svg></button>
-              <button class="pb-gallery-arrow" onClick="{{detailNext}}" style="{{detailNextStyle}}" aria-label="Image suivante"><svg width="9" height="18" viewBox="0 0 9 18" style="display:block;"><path d="M1 1 L8 9 L1 17" fill="none" stroke="#FFFFFF" stroke-width="0.9"></path></svg></button>
+              <button class="pb-gallery-arrow" onClick="{{detailPrev}}" style="{{detailPrevStyle}}" aria-label="Image précédente"><svg width="9" height="18" viewBox="0 0 9 18" style="display:block;overflow:visible;"><path d="M8 1 L1 9 L8 17" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"></path><path d="M8 1 L1 9 L8 17" fill="none" stroke="{{ink}}" stroke-width="1"></path></svg></button>
+              <button class="pb-gallery-arrow" onClick="{{detailNext}}" style="{{detailNextStyle}}" aria-label="Image suivante"><svg width="9" height="18" viewBox="0 0 9 18" style="display:block;overflow:visible;"><path d="M1 1 L8 9 L1 17" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-opacity="0.85" stroke-linecap="round" stroke-linejoin="round"></path><path d="M1 1 L8 9 L1 17" fill="none" stroke="{{ink}}" stroke-width="1"></path></svg></button>
             </sc-if>
             <sc-if value="{{detailNoImage}}" hint-placeholder-val="{{ false }}">
               <div style="{{detailPlaceholderStyle}}">{{ detailPh }}</div>
@@ -622,7 +639,11 @@ const HINT_SEEN_KEY = 'pb-hint-seen';
 const HINT_DELAY_MS = 2500;
 const HINT_TEXT_TOUCH = 'glissez pour explorer · pincez pour zoomer';
 const HINT_TEXT_MOUSE = 'glissez pour explorer · molette pour zoomer';
+// The opening sequence (sundial film) is switched off for now: set to true
+// to bring it back — everything else (code, video, poster) is still there.
+const INTRO_ENABLED = false;
 const introWanted = () => {
+  if (!INTRO_ENABLED) return false;
   if (normPath(location.pathname) !== '/') return false;  // deep link: straight to the page
   try { return !sessionStorage.getItem(INTRO_SEEN_KEY); } catch (e) { return false; }
 };
@@ -1061,9 +1082,9 @@ const GENESIS_SCROLL = [
 class Component extends DCLogic {
   state = {
     camX: CX, camY: CY,
-    // Starts at homeZoom() — the exact same zoom the compass button resets
-    // to — so first paint and "click compass" are pixel-identical: just the
-    // cross, no cards. See homeZoom() below for why.
+    // Starts at homeZoom() — the same view the filter's return-to-centre
+    // glides back to — so first paint and that return are identical. See
+    // homeZoom() below.
     zoom: this.homeZoom(),
     dragging: false, lastX: 0, lastY: 0, navigating: false,
     detail: null, detailIdx: 0, detailActiveIdx: 0, searchOpen: false, searchQuery: '',
@@ -1084,6 +1105,7 @@ class Component extends DCLogic {
     introPlain: false,   // no film (poster fallback): the wordmark stays in place
     hint: false,      // navigation hint on screen (see _armHint)
     filter: null,     // 'edito' | 'docu' | null — see toggleFilter
+    veil: false,      // white veil over the canvas during a return to the dial (_returnHome)
   };
 
   componentDidMount() {
@@ -1629,6 +1651,7 @@ class Component extends DCLogic {
   }
 
   componentWillUnmount() {
+    clearTimeout(this._returnTimer);
     window.removeEventListener('keydown', this._onGalleryKey);
     this._introCleanup();
     if (this._hintDone) { clearTimeout(this._hintTimer); for (const type of ['pointerdown', 'wheel', 'keydown', 'touchstart']) window.removeEventListener(type, this._hintDone, { capture: true }); }
@@ -1729,6 +1752,30 @@ class Component extends DCLogic {
   // true scale (no GPU texture-stretch blur mid-move). Any real gesture
   // cancels it (see _cancelGlideHome in onDown / handleWheel).
   _glideHome = () => this._glideTo(CX, CY, this.homeZoom());
+
+  // Back to the dial — the home map's own, the only one (copies have none).
+  // Still on the home map: the usual eased glide. Out in a copy: gliding
+  // across whole periods would be long and would land on a copy's centre,
+  // so instead the canvas whitens (RETURN_VEIL_MS), the camera is set on the
+  // home map a little further out, and it zooms gently in onto the dial while
+  // the white lifts — it reads as coming back to where you started.
+  _returnHome = () => {
+    const onHomeMap = Math.abs(this.state.camX - CX) <= WRAP_W / 2 && Math.abs(this.state.camY - CY) <= WRAP_H / 2;
+    if (onHomeMap) { this._glideHome(); return; }
+    const RETURN_VEIL_MS = 260, RETURN_FROM = 0.55; // zoom-in from 55 % of the home zoom
+    this._stopMomentum();
+    this._cancelGlideHome();
+    clearTimeout(this._returnTimer);
+    this.setState({ veil: true });
+    this._returnTimer = setTimeout(() => {
+      const zT = this.homeZoom();
+      this.setState({ camX: CX, camY: CY, zoom: Math.max(this.minZoom(), zT * RETURN_FROM), navigating: false, dragging: false });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        this.setState({ veil: false });
+        this._glideTo(CX, CY, zT);
+      }));
+    }, RETURN_VEIL_MS);
+  };
   // The same eased glide towards any world point (x, y) and zoom — used by
   // the compass return-to-center (_glideHome) and the Édito / Docu filter.
   _glideTo = (x, y, zT) => {
@@ -1759,9 +1806,12 @@ class Component extends DCLogic {
       } else {
         this._glideRaf = null;
         this._homing = false;
-        // Land on (x, y) exactly (xT ≡ x mod W, so no visible jump) to keep
-        // camX/camY from drifting unbounded across repeated uses.
-        this.setState({ camX: x, camY: y, zoom: zT, navigating: false });
+        // Land exactly where the glide went (xT, yT). It used to snap back to
+        // the home-map equivalent (x, y) to keep camX/camY bounded — invisible
+        // while every copy of the map was identical, but the copies have no
+        // centre now (see _fillers), so that snap popped the dial in and the
+        // filler cards out.
+        this.setState({ camX: xT, camY: yT, zoom: zT, navigating: false });
       }
     };
     this._glideRaf = requestAnimationFrame(step);
@@ -1791,7 +1841,7 @@ class Component extends DCLogic {
   toggleFilter = (cat) => {
     if (this.state.filter === cat) {
       this.setState({ filter: null });
-      this._glideHome();
+      this._returnHome();
       return;
     }
     this.ALL(); // makes sure _navTargets is computed
@@ -2182,57 +2232,39 @@ class Component extends DCLogic {
   // available via `this.homeZoom()` even from inside the `state` field
   // initializer above regardless of field declaration order.
   //
-  // The zoom level that shows ONLY the cross (cadran + its 4 labels) —
-  // nothing else — computed from the actual viewport (window.innerWidth/
-  // innerHeight, read fresh on every call — this is NOT a fixed number)
-  // so it holds on any screen size, mobile to a wide monitor. The cross's
-  // own footprint is anisotropic — measured directly off the rendered
-  // labels: the Édito/Docu row reaches ~134px half from CX, the Poésie/
-  // Manifeste one ~101px half from CY — so each axis gets its OWN
-  // required half-extent, then a comfortable ~1.7x padding (HALF_X/HALF_Y)
-  // so the labels sit well clear of the edge rather than flush against it
-  // on typical screens. A prior version padded only ~1.2x, which on
-  // common laptop-ish aspect ratios (where the height axis binds) left
-  // just ~9% margin — reads as "too zoomed in" even though nothing was
-  // actually cropped.
-  //
-  // zoomTarget (comfort) alone is NOT safe on every aspect ratio, though:
-  // Math.min(zx,zy) picks whichever axis is more restrictive and zooms
-  // to satisfy JUST that axis's HALF — the OTHER axis then shows however
-  // much world THAT axis's screen size implies at that zoom, unbounded.
-  // On a narrow/tall phone, the width axis binds (low zoom), and the
-  // tall height axis can then reveal far more world than HALF_Y ever
-  // budgeted for — measured on this layout, that pushed the visible
-  // vertical half past a decor piece sitting at 495 world px, bleeding a
-  // sliver of it into view. SAFE_MAX_X/SAFE_MAX_Y are the true measured
-  // clearances (615.9 / 495.4 world px) to the nearest surrounding card
-  // or decor piece, each measured WITH the other axis held at its own
-  // HALF — i.e. the actual coupled boundary, not a cardinal-direction
-  // guess — with a small safety margin below both. zoomFloor is the
-  // zoom that keeps EACH axis's visible half under its own SAFE_MAX;
-  // taking the max of zoomTarget and zoomFloor means the comfortable
-  // framing is used whenever it's already safe, and only tightens
-  // beyond it on the rare aspect ratio where comfort alone would bleed.
-  //
-  // zoomCropCeiling is a second, harder guard: on an aspect ratio narrow
-  // AND tall enough (well beyond any real phone or monitor — e.g. a
-  // 320×1400 window), zoomFloor's push to avoid bleeding in a decor
-  // piece can itself exceed what the width axis can show without
-  // cropping the Édito/Docu labels — a worse failure than a sliver of
-  // unrelated content, since it breaks the cross itself. The ceiling
-  // (built from TRUE_MIN_X/Y, the labels' actual measured half-extents,
-  // no padding) is never crossed even if that means zoomFloor's
-  // anti-bleed target can't be fully honored on such a shape.
+  // The home view (first paint, the filter's return-to-centre): the cross
+  // and the first marks of the scale around it — columns 5 / 6 (±GRID_PX)
+  // and rows F / E (±GRID_PY), labels included — and NO card, curio or text
+  // block, not even a sliver.
+  //  1. zoomTarget fits those four marks plus a little air (HOME_HALF_*).
+  //  2. On a screen whose shape shows more on one axis (a wide laptop sees
+  //     further left/right), that can bring a piece into view: for every
+  //     piece, the view stays clear of it as long as EITHER axis's visible
+  //     half stops short of it, so the least zoom that keeps it out is
+  //     min(W / 2dx, H / 2dy). The home zoom is the largest of those and of
+  //     zoomTarget — the marks only get cropped on a shape where showing them
+  //     whole would let a piece in.
+  // Computed from the actual viewport and the actual layout, never below
+  // the zoom-out floor.
   homeZoom() {
-    const HALF_X = 230, HALF_Y = 172;
-    const SAFE_MAX_X = 580, SAFE_MAX_Y = 470;
-    const TRUE_MIN_X = 135, TRUE_MIN_Y = 102;
-    const zoomFor = (dim, half) => dim / (2 * half);
-    const zoomTarget = Math.min(zoomFor(window.innerWidth, HALF_X), zoomFor(window.innerHeight, HALF_Y));
-    const zoomFloor = Math.max(zoomFor(window.innerWidth, SAFE_MAX_X), zoomFor(window.innerHeight, SAFE_MAX_Y));
-    const zoomCropCeiling = Math.min(zoomFor(window.innerWidth, TRUE_MIN_X), zoomFor(window.innerHeight, TRUE_MIN_Y));
-    const zoom = Math.min(zoomCropCeiling, Math.max(zoomTarget, zoomFloor));
-    return Math.max(0.5, Math.min(10, zoom));
+    const HOME_HALF_W = GRID_PX + 80, HOME_HALF_H = GRID_PY + 90; // marks + labels + air
+    const W = window.innerWidth, H = window.innerHeight;
+    let zoom = Math.min(W / (2 * HOME_HALF_W), H / (2 * HOME_HALF_H));
+    try {
+      this.ALL(); // makes sure the layout (_all, _decor, _texts) exists
+      const PAD = 24; // keep pieces this far (world px) outside the view
+      const rects = [
+        ...this._all.filter((p) => !p.offCanvas).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h + 90 })), // + caption
+        ...this._decor.filter((d) => !d.sundial), ...this._texts,
+      ];
+      for (const r of rects) {
+        const dx = Math.max(r.x - CX, CX - (r.x + r.w), 0) - PAD;
+        const dy = Math.max(r.y - CY, CY - (r.y + r.h), 0) - PAD;
+        const keepOut = Math.min(dx > 0 ? W / (2 * dx) : Infinity, dy > 0 ? H / (2 * dy) : Infinity);
+        if (Number.isFinite(keepOut)) zoom = Math.max(zoom, keepOut);
+      }
+    } catch (e) { /* layout not ready: the marks framing alone */ }
+    return Math.max(this.minZoom(), Math.min(10, zoom));
   }
 
   navTo = (x, y, zoom = 1) => this.setState({ camX: x, camY: y, zoom, navigating: true, dragging: false });
@@ -2993,6 +3025,64 @@ class Component extends DCLogic {
       return { x: CX, y: CY + (zone === 'poesie' ? 3 : -3) * GRID_PY, halfW: 2.2 * GRID_PX, halfH: 2.4 * GRID_PY };
     };
     this._navTargets = { edito: navTarget('edito', edito), docu: navTarget('docu', docu), poesie: navTarget('poesie', poesie), manifeste: navTarget('manifeste', manifeste) };
+
+    // ── One centre only ───────────────────────────────────────────────
+    // The infinite canvas repeats the map (see wrapAt). Only the home map
+    // keeps its centre — dial, cross labels, axis marks and the empty space
+    // around them. In every copy, that cross (the axis row and column) and
+    // the four cells diagonal to its middle are filled instead ("fillers",
+    // drawn only away from the home map — see decorateGrid / decorItems),
+    // so beyond the one true centre the canvas reads as a continuous
+    // mosaic, at the grid's own spacing:
+    //  · the east half takes Édito projects only and the west half Docu
+    //    only, so "Édito right, Docu left" holds everywhere on the canvas;
+    //    the vertical column, between the two, alternates them;
+    //  · each of the cross's four arms gets one curio instead of a project,
+    //    and two cells stay empty, so the cross doesn't read as a denser
+    //    block of projects than the mosaic around it.
+    // Each filler card is a real project (a click opens it), dealt from its
+    // side's own shuffled deck, so the same project never sits next to
+    // itself. Fixed seed: identical on every load.
+    const fillRand = this.makeRand(11);
+    const shuffle = (list) => {
+      const a = list.slice();
+      for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(fillRand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      return a;
+    };
+    const decks = { edito: shuffle(edito.filter((p) => !p.offCanvas)), docu: shuffle(docu.filter((p) => !p.offCanvas)) };
+    const dealt = { edito: 0, docu: 0 };
+    const deal = (cat) => decks[cat][dealt[cat]++ % decks[cat].length];
+    const curioDeck = shuffle(layout.decor.filter((d) => !d.sundial && !d.href));
+    // Per arm (east, west, north, south), cells 2–5 out from the centre:
+    // one becomes a curio; on two arms, another stays empty.
+    const arms = ['e', 'w', 'n', 's'];
+    const special = {};
+    arms.forEach((arm) => { special[arm + (2 + Math.floor(fillRand() * 4))] = 'curio'; });
+    shuffle(arms).slice(0, 2).forEach((arm) => {
+      let n; do { n = 2 + Math.floor(fillRand() * 4); } while (special[arm + n]);
+      special[arm + n] = 'empty';
+    });
+    const armOf = (k, j) => (j === 0 ? (k > 0 ? 'e' + k : 'w' + -k) : k === 0 ? (j < 0 ? 'n' + -j : 's' + j) : null);
+    this._fillers = [];
+    this._fillerDecor = [];
+    let curioIdx = 0, vIdx = 0;
+    for (let j = -GRID_RANGE; j <= GRID_RANGE; j++) for (let k = -GRID_RANGE; k <= GRID_RANGE; k++) {
+      if (!(k === 0 || j === 0 || (Math.abs(k) === 1 && Math.abs(j) === 1))) continue;
+      const role = special[armOf(k, j)];
+      if (role === 'empty') continue;
+      if (role === 'curio') {
+        const d = curioDeck[curioIdx++ % curioDeck.length];
+        this._fillerDecor.push({ ...d, filler: true, x: CX + k * GRID_PX - d.w / 2, y: CY + j * GRID_PY - d.h / 2 });
+        continue;
+      }
+      const cat = k > 0 ? 'edito' : k < 0 ? 'docu' : (vIdx++ % 2 === 0 ? 'edito' : 'docu');
+      const p = deal(cat);
+      this._fillers.push({
+        ...p, filler: true, fid: this._fillers.length,
+        x: CX + k * GRID_PX - p.w / 2, y: CY + j * GRID_PY - p.h / 2,
+        safeGrow: GRID_PY - p.h - 90, // the grid's own clear gap (caption included)
+      });
+    }
     return this._all;
   }
 
@@ -3071,6 +3161,13 @@ class Component extends DCLogic {
     // Opacity only when it actually differs from 1 (keeps idle pieces
     // free of a needless stacking context).
     const wrapOpacity = (w, base = 1) => (w.fade * base) >= 0.999 ? (base === 1 ? '' : `opacity:${base};`) : `opacity:${(w.fade * base).toFixed(3)};`;
+    // Which copy of the map a piece is drawn in: (camX - dispX) is a whole
+    // number of periods, the piece's offset adds its own; tile (0, 0) is the
+    // home map. homeOnly hides the centre (dial, cross labels, axis marks)
+    // everywhere else; fillers do the reverse (see decorateGrid).
+    const camTileX = (this.state.camX - dispX) / WRAP_W, camTileY = (this.state.camY - dispY) / WRAP_H;
+    const isHomeCopy = (cx, cy, w) => Math.round(camTileX + (cx + w.ox - CX) / WRAP_W) === 0 && Math.round(camTileY + (cy + w.oy - CY) / WRAP_H) === 0;
+    const homeOnly = (cx, cy, w) => (isHomeCopy(cx, cy, w) ? '' : 'display:none;');
     // Opening sequence (see _startIntro). During the video every piece is
     // hidden; during the reveal each fades in from 0 to its own opacity,
     // delayed by its distance from the cross (waves outwards). The dial
@@ -3106,7 +3203,7 @@ class Component extends DCLogic {
     // Sign
     const armLen = 76;
     const signWrap = wrapAt(CX, CY);
-    const signBoxStyle = `position:absolute;left:${CX - 110 + signWrap.ox}px;top:${CY - 110 + signWrap.oy}px;width:220px;height:220px;` + wrapOpacity(signWrap) + introStyle(CX + signWrap.ox, CY + signWrap.oy);
+    const signBoxStyle = `position:absolute;left:${CX - 110 + signWrap.ox}px;top:${CY - 110 + signWrap.oy}px;width:220px;height:220px;` + wrapOpacity(signWrap) + introStyle(CX + signWrap.ox, CY + signWrap.oy) + homeOnly(CX, CY, signWrap);
     const labelBase = `position:absolute;font-family:'prestige-elite-std',monospace;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:${ink};white-space:nowrap;`;
     const signLabelRightStyle = labelBase + `left:${110 + armLen + 10}px;top:104px;`;
     const signLabelLeftStyle = labelBase + `right:${110 + armLen + 10}px;top:104px;text-align:right;`;
@@ -3137,12 +3234,12 @@ class Component extends DCLogic {
       const wc = wrapAt(axisX + k * GRID_PX, CY);
       axisTicks.push({
         text: String(gridColNumber(k)),
-        style: axisBase + `left:${axisX + k * GRID_PX - 28 + wc.ox}px;top:${CY + wc.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wc) + introStyle(axisX + k * GRID_PX + wc.ox, CY + wc.oy),
+        style: axisBase + `left:${axisX + k * GRID_PX - 28 + wc.ox}px;top:${CY + wc.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wc) + introStyle(axisX + k * GRID_PX + wc.ox, CY + wc.oy) + homeOnly(axisX + k * GRID_PX, CY, wc),
       });
       const wr = wrapAt(axisX, CY + k * GRID_PY);
       axisTicks.push({
         text: gridRowLetter(k),
-        style: axisBase + `left:${axisX - 28 + wr.ox}px;top:${CY + k * GRID_PY + wr.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wr) + introStyle(axisX + wr.ox, CY + k * GRID_PY + wr.oy),
+        style: axisBase + `left:${axisX - 28 + wr.ox}px;top:${CY + k * GRID_PY + wr.oy}px;width:56px;text-align:center;border-top:1px solid ${axisDash};padding-top:7px;` + wrapOpacity(wr) + introStyle(axisX + wr.ox, CY + k * GRID_PY + wr.oy) + homeOnly(axisX, CY + k * GRID_PY, wr),
       });
     }
 
@@ -3228,6 +3325,9 @@ class Component extends DCLogic {
 
     const decorateGrid = (list) => list.map(p => {
       const wrap = wrapAt(p.x + p.w / 2, p.y + p.h / 2);
+      // A filler card only exists in the copies: on the home map its cell
+      // is the centre's empty space.
+      const fillerHidden = p.filler && isHomeCopy(p.x + p.w / 2, p.y + p.h / 2, wrap);
       const { scale, smooth } = tileScale(p, wrap);
       // Same transition as the world itself (see worldStyle above): 'none'
       // during a live drag/wheel (each event already setStates its own
@@ -3253,10 +3353,10 @@ class Component extends DCLogic {
         (smooth > 0.02 ? 'will-change:opacity;' : '');
       return {
         code: p.code, title: p.title, src: p.src,
-        slot: 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
+        slot: p.filler ? 'pb-f-' + p.fid : 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
         alt: p.title + ' — ' + CAT_LABEL[p.cat].toLowerCase() + ' de Petit Bouquetin, studio créatif à Paris',
         open: openDetail(p),
-        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition === 'none' ? filterFade : transition + ', ' + filterFade};${magTransform}` + wrapOpacity(wrap, dimFor(p.cat)) + (dimFor(p.cat) < 1 ? 'pointer-events:none;' : '') + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2),
+        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition === 'none' ? filterFade : transition + ', ' + filterFade};${magTransform}` + wrapOpacity(wrap, dimFor(p.cat)) + (dimFor(p.cat) < 1 ? 'pointer-events:none;' : '') + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2) + (fillerHidden ? 'display:none;' : ''),
         shadowStyle,
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
         capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
@@ -3267,6 +3367,7 @@ class Component extends DCLogic {
 
     const editoItems = decorateGrid(all.filter(p => p.cat === 'edito' && !p.offCanvas));
     const docuItems = decorateGrid(all.filter(p => p.cat === 'docu' && !p.offCanvas));
+    const fillerItems = decorateGrid(this._fillers || []);
     const poesieItems = decorateGrid(all.filter(p => p.cat === 'poesie' && !p.offCanvas));
     const manifesteItems = decorateGrid(all.filter(p => p.cat === 'manifeste' && !p.offCanvas));
 
@@ -3276,13 +3377,14 @@ class Component extends DCLogic {
     // here and rendered as its own <a> element below instead. The sundial
     // (the compass dial at the cross) is just another image now, loaded
     // eagerly since it sits on the very first screen.
-    const decorItems = this._decor.filter((d) => !d.href).map((d) => {
+    const decorItems = [...this._decor.filter((d) => !d.href), ...(this._fillerDecor || [])].map((d) => {
       const w = wrapAt(d.x + d.w / 2, d.y + d.h / 2);
       return {
         src: d.src,
         loading: d.sundial ? 'eager' : 'lazy',
         style: `position:absolute;left:${d.x + w.ox}px;top:${d.y + w.oy}px;width:${d.w}px;height:${d.h}px;` +
-          `object-fit:contain;pointer-events:none;transition:${filterFade};` + wrapOpacity(w, d.sundial ? 1 : 0.9 * dimFor(null)) + introStyle(d.x + w.ox + d.w / 2, d.y + w.oy + d.h / 2, d.sundial ? 'dial' : ''),
+          `object-fit:contain;pointer-events:none;transition:${filterFade};` + wrapOpacity(w, d.sundial ? 1 : 0.9 * dimFor(null)) + introStyle(d.x + w.ox + d.w / 2, d.y + w.oy + d.h / 2, d.sundial ? 'dial' : '') + (d.sundial ? homeOnly(d.x + d.w / 2, d.y + d.h / 2, w) : '') +
+          (d.filler && isHomeCopy(d.x + d.w / 2, d.y + d.h / 2, w) ? 'display:none;' : ''), // a filler curio only exists in the copies
       };
     });
 
@@ -3409,7 +3511,11 @@ class Component extends DCLogic {
       `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.5;letter-spacing:0.08em;color:${inkFaint};` +
       `width:max-content;max-width:calc(100vw - ${hintAbove ? 48 : 140}px);text-align:center;white-space:pre-line;` +
       `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;`;
-    const goCenter = () => this._glideHome();
+    const goCenter = () => this._returnHome();
+    // Fades in fast (the jump happens under it), lifts slowly (the zoom-in
+    // onto the dial shows through).
+    const veilStyle = `position:fixed;inset:0;z-index:55;pointer-events:none;background:${bg};` +
+      `opacity:${this.state.veil ? 1 : 0};transition:opacity ${this.state.veil ? 240 : 700}ms ease;`;
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
     const closeSearch = () => this.setState({ searchOpen: false });
 
@@ -3654,7 +3760,13 @@ class Component extends DCLogic {
     });
 
     const detailMainStyle = `display:flex;flex-direction:column;align-items:center;`;
-    const detailImgWrapStyle = `position:relative;display:flex;align-items:center;justify-content:center;width:100%;min-height:200px;touch-action:pan-y;`;
+    // The large image sits in a FIXED frame: one height for every photo, the
+    // photo contained and centred inside it. Before, the frame took each
+    // photo's own height, so paging from a landscape to a portrait image
+    // pushed the caption and text down and back up. The frame is the image
+    // column's width in a 4:5 proportion, capped at 70vh (the old maximum):
+    // its height only depends on the window, never on the photo shown.
+    const detailImgWrapStyle = `position:relative;display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/5;max-height:70vh;min-height:0;overflow:hidden;touch-action:pan-y;`; // min-height:0: a tall photo must not stretch the frame
     // Previous / next arrows, over the image's left and right edges: a
     // hairline chevron with no backdrop (see .pb-gallery-arrow for its quiet
     // opacity and difference blend), inside a 44 px touch target. Hidden for
@@ -3676,8 +3788,8 @@ class Component extends DCLogic {
     const detailActiveSrc = dItem ? (dItem.gallery[this.state.detailActiveIdx] || dItem.src) : undefined;
     const detailActiveAlt = dItem ? (dItem.gallery[this.state.detailActiveIdx] ? galleryAlt(this.state.detailActiveIdx) : dItem.title + ' — Petit Bouquetin') : '';
     const detailNoImage = !!dItem && !detailActiveSrc;
-    const detailImgStyle = `max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain;display:block;`;
-    const detailPlaceholderStyle = `width:100%;aspect-ratio:4/5;max-height:70vh;background:${tileBg};display:flex;align-items:center;justify-content:center;font-family:'prestige-elite-std',monospace;font-size:13px;color:${inkFaint};text-align:center;padding:24px;`;
+    const detailImgStyle = `max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;`;
+    const detailPlaceholderStyle = `width:100%;height:100%;background:${tileBg};display:flex;align-items:center;justify-content:center;font-family:'prestige-elite-std',monospace;font-size:13px;color:${inkFaint};text-align:center;padding:24px;`;
 
     const detailCapStyle = `display:flex;gap:10px;align-items:baseline;justify-content:center;margin-top:20px;`;
     const detailCodeStyle = `font-family:'Space Mono',monospace;font-size:12px;letter-spacing:0.04em;color:${ink};`;
@@ -3705,9 +3817,9 @@ class Component extends DCLogic {
       signBoxStyle,
       signLabelRightStyle, signLabelLeftStyle, signLabelDownStyle, signLabelUpStyle,
       goEdito, goDocu, goPoesie, goManifeste, axisTicks,
-      editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, textItems,
+      fillerItems, editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, textItems,
       navStyle, navGroupLeftStyle, navGroupRightStyle, navItemStyle, openManifesto, openNewsletter, openBoutique, soonOpen, closeSoon, soonTitle, soonColStyle, soonTitleStyle, soonNoteStyle, brandStyle, brandPickerOpen, closeBrandPicker, brandPickerStyle, brandPickerHeadStyle, brandPickerCloseStyle, brandOptions, contactStyle, contactLabel, copyEmail: this.copyEmail,
-      searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
+      veilStyle, searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
       filterGroupStyle, filterEdito, filterDocu, filterEditoBtnStyle, filterDocuBtnStyle, filterEditoTextStyle, filterDocuTextStyle, filterEditoPressed, filterDocuPressed, filterEditoLabel, filterDocuLabel,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
