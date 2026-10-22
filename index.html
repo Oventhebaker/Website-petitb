@@ -3766,7 +3766,7 @@ class Component extends DCLogic {
     // pushed the caption and text down and back up. The frame is the image
     // column's width in a 4:5 proportion, capped at 70vh (the old maximum):
     // its height only depends on the window, never on the photo shown.
-    const detailImgWrapStyle = `position:relative;display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/5;max-height:70vh;min-height:0;overflow:hidden;touch-action:pan-y;`; // min-height:0: a tall photo must not stretch the frame
+    const detailImgWrapStyle = `position:relative;display:flex;align-items:center;justify-content:center;width:100%;aspect-ratio:4/5;max-height:70vh;min-height:0;touch-action:pan-y;`; // min-height:0: a tall photo must not stretch the frame
     // Previous / next arrows, over the image's left and right edges: a
     // hairline chevron with no backdrop (see .pb-gallery-arrow for its quiet
     // opacity and difference blend), inside a 44 px touch target. Hidden for
@@ -3788,7 +3788,11 @@ class Component extends DCLogic {
     const detailActiveSrc = dItem ? (dItem.gallery[this.state.detailActiveIdx] || dItem.src) : undefined;
     const detailActiveAlt = dItem ? (dItem.gallery[this.state.detailActiveIdx] ? galleryAlt(this.state.detailActiveIdx) : dItem.title + ' — Petit Bouquetin') : '';
     const detailNoImage = !!dItem && !detailActiveSrc;
-    const detailImgStyle = `max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;display:block;`;
+    // The photo fills the frame's box and is contained in it (letterboxed,
+    // never cropped). Sized by the box itself rather than max-height:100%,
+    // which some browsers (Safari) don't resolve against an aspect-ratio
+    // frame — the photo then kept its natural height and got cut off.
+    const detailImgStyle = `position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;`;
     const detailPlaceholderStyle = `width:100%;height:100%;background:${tileBg};display:flex;align-items:center;justify-content:center;font-family:'prestige-elite-std',monospace;font-size:13px;color:${inkFaint};text-align:center;padding:24px;`;
 
     const detailCapStyle = `display:flex;gap:10px;align-items:baseline;justify-content:center;margin-top:20px;`;
