@@ -380,6 +380,15 @@
     <button onClick="{{filterDocu}}" style="{{filterDocuBtnStyle}}" aria-pressed="{{filterDocuPressed}}" aria-label="{{filterDocuLabel}}"><span style="{{filterDocuTextStyle}}">Docu</span></button>
   </div>
 
+  <!-- ============= BACK TO THE DIAL (left of the search) =============
+       Same round button as the search; the button's own circle is the dial's
+       rim, with the dial's compass star inside and a long needle pointing
+       down from the centre. Glides back to the home dial (and drops the Édito /
+       Docu filter) — see goCenter / _returnHome. -->
+  <button onClick="{{goCenter}}" style="{{homeBtnStyle}}" aria-label="Revenir au cadran">
+    <svg width="34" height="34" viewBox="0 0 24 24" style="display:block;"><path d="M12.00 2.60 L12.73 10.24 L15.82 8.18 L13.76 11.27 L21.40 12.00 L13.76 12.73 L15.82 15.82 L12.73 13.76 L12.00 21.40 L11.27 13.76 L8.18 15.82 L10.24 12.73 L2.60 12.00 L10.24 11.27 L8.18 8.18 L11.27 10.24 Z" fill="{{ink}}"></path><path d="M10.7 12 L13.3 12 L12 23.6 Z" fill="{{ink}}"></path><circle cx="12" cy="12" r="1.5" fill="{{ink}}" stroke="#FFFFFF" stroke-width="0.7"></circle></svg>
+  </button>
+
   <!-- ============= SEARCH ============= -->
   <button onClick="{{openSearch}}" style="{{searchBtnStyle}}">
     <svg width="16" height="16" viewBox="0 0 16 16" style="display:block;"><circle cx="6.5" cy="6.5" r="5" fill="none" stroke="{{ink}}" stroke-width="1.3"></circle><line x1="10.3" y1="10.3" x2="15" y2="15" stroke="{{ink}}" stroke-width="1.3"></line></svg>
@@ -1171,8 +1180,9 @@ class Component extends DCLogic {
     // A resize can raise the floor above the current zoom (a wider window fits
     // the grid at a higher zoom): pull the camera in to it.
     this._onResize = () => {
-      const floor = this.minZoom();
+      const floor = this.minZoom(), ceil = this.maxZoom();
       if (this.state.zoom < floor) this.setState({ zoom: floor });
+      else if (this.state.zoom > ceil) this.setState({ zoom: ceil });
       else this.forceUpdate();
     };
     window.addEventListener('resize', this._onResize);
@@ -1823,7 +1833,7 @@ class Component extends DCLogic {
     const FIT_MARGIN = 1.15;
     const zx = window.innerWidth / (2 * t.halfW * FIT_MARGIN);
     const zy = window.innerHeight / (2 * t.halfH * FIT_MARGIN);
-    return Math.max(this.minZoom(), Math.min(1, zx, zy));
+    return Math.max(this.minZoom(), Math.min(1, this.maxZoom(), zx, zy));
   }
 
   // Project gallery: previous / next image (arrows, ← → keys, swipe),
@@ -2349,6 +2359,15 @@ class Component extends DCLogic {
 
   // The lowest zoom allowed right now: the one where the grid's whole width
   // fits the viewport, never below the absolute floor.
+  // The highest zoom allowed: the home view's own (homeZoom) — you can't
+  // zoom in closer than the page shows on load. Cached per window size,
+  // since it's asked on every wheel / pinch step.
+  maxZoom() {
+    const key = window.innerWidth + 'x' + window.innerHeight;
+    if (this._maxZoomKey !== key) { this._maxZoomKey = key; this._maxZoomVal = this.homeZoom(); }
+    return this._maxZoomVal;
+  }
+
   minZoom() {
     return Math.max(NORMAL_MIN_ZOOM, window.innerWidth / (2 * CONTENT_HALF_W));
   }
@@ -2358,13 +2377,10 @@ class Component extends DCLogic {
   zoomAt = (factor, clientX, clientY) => {
     this.setState(s => {
       const z0 = s.zoom;
-      // Upper bound raised to 10 so the clamp never fights the viewport-
-      // computed initial zoom (state.zoom above), which can exceed 2.5 on
-      // large screens.
-      //
+      // Upper bound: maxZoom() — the home view's zoom, the closest you can get.
       // Lower bound: minZoom() — zooming out stops where the grid's full width
       // just fits the screen.
-      const z1 = Math.max(this.minZoom(), Math.min(10, z0 * factor));
+      const z1 = Math.max(this.minZoom(), Math.min(this.maxZoom(), z0 * factor));
       if (z1 === z0) return null;
       const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
       const worldX = s.camX + (clientX - cx) / z0;
@@ -3050,8 +3066,35 @@ class Component extends DCLogic {
       return a;
     };
     const decks = { edito: shuffle(edito.filter((p) => !p.offCanvas)), docu: shuffle(docu.filter((p) => !p.offCanvas)) };
+    // No two identical tiles side by side: each filler takes the next
+    // project in its side's deck that isn't already within two cells of it —
+    // neither the project's own card (its home cell, at the same place in
+    // every copy) nor an earlier filler — counting across the seams between
+    // copies (cells wrap every 2·GRID_RANGE + 1). Falls back to one cell,
+    // then to anything, only if the deck can't avoid it.
+    const PERIOD = 2 * GRID_RANGE + 1;
+    const cellDist = (a, b) => {
+      const dk = Math.abs(a.k - b.k) % PERIOD, dj = Math.abs(a.j - b.j) % PERIOD;
+      return Math.max(Math.min(dk, PERIOD - dk), Math.min(dj, PERIOD - dj));
+    };
+    const taken = [...edito, ...docu].filter((p) => !p.offCanvas).map((p) => ({
+      pcode: p.pcode,
+      k: Math.round((p.x + p.w / 2 - CX) / GRID_PX), j: Math.round((p.y + p.h / 2 - CY) / GRID_PY),
+    }));
     const dealt = { edito: 0, docu: 0 };
-    const deal = (cat) => decks[cat][dealt[cat]++ % decks[cat].length];
+    const deal = (cat, k, j) => {
+      const deck = decks[cat];
+      for (const radius of [2, 1, 0]) {
+        for (let t = 0; t < deck.length; t++) {
+          const p = deck[(dealt[cat] + t) % deck.length];
+          if (radius && taken.some((o) => o.pcode === p.pcode && cellDist(o, { k, j }) <= radius)) continue;
+          dealt[cat] += t + 1;
+          taken.push({ pcode: p.pcode, k, j });
+          return p;
+        }
+      }
+      return deck[dealt[cat]++ % deck.length];
+    };
     const curioDeck = shuffle(layout.decor.filter((d) => !d.sundial && !d.href));
     // Per arm (east, west, north, south), cells 2–5 out from the centre:
     // one becomes a curio; on two arms, another stays empty.
@@ -3076,7 +3119,7 @@ class Component extends DCLogic {
         continue;
       }
       const cat = k > 0 ? 'edito' : k < 0 ? 'docu' : (vIdx++ % 2 === 0 ? 'edito' : 'docu');
-      const p = deal(cat);
+      const p = deal(cat, k, j);
       this._fillers.push({
         ...p, filler: true, fid: this._fillers.length,
         x: CX + k * GRID_PX - p.w / 2, y: CY + j * GRID_PY - p.h / 2,
@@ -3479,6 +3522,8 @@ class Component extends DCLogic {
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
     const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
+    // Back-to-the-dial button: the search button's twin, 12 px to its left.
+    const homeBtnStyle = `position:fixed;bottom:24px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
     // Édito / Docu filter, bottom left where the compass sat (same corner,
     // same intro fade). Text buttons in the interface face; each button is a
     // 44 px tall touch target, the label inside it carries the styling. The
@@ -3511,7 +3556,9 @@ class Component extends DCLogic {
       `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.5;letter-spacing:0.08em;color:${inkFaint};` +
       `width:max-content;max-width:calc(100vw - ${hintAbove ? 48 : 140}px);text-align:center;white-space:pre-line;` +
       `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;`;
-    const goCenter = () => this._returnHome();
+    // Back to the dial: also drops the Édito / Docu filter, so you're truly
+    // back where you started.
+    const goCenter = () => { if (this.state.filter) this.setState({ filter: null }); this._returnHome(); };
     // Fades in fast (the jump happens under it), lifts slowly (the zoom-in
     // onto the dial shows through).
     const veilStyle = `position:fixed;inset:0;z-index:55;pointer-events:none;background:${bg};` +
@@ -3823,7 +3870,7 @@ class Component extends DCLogic {
       goEdito, goDocu, goPoesie, goManifeste, axisTicks,
       fillerItems, editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, textItems,
       navStyle, navGroupLeftStyle, navGroupRightStyle, navItemStyle, openManifesto, openNewsletter, openBoutique, soonOpen, closeSoon, soonTitle, soonColStyle, soonTitleStyle, soonNoteStyle, brandStyle, brandPickerOpen, closeBrandPicker, brandPickerStyle, brandPickerHeadStyle, brandPickerCloseStyle, brandOptions, contactStyle, contactLabel, copyEmail: this.copyEmail,
-      veilStyle, searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
+      veilStyle, homeBtnStyle, searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
       filterGroupStyle, filterEdito, filterDocu, filterEditoBtnStyle, filterDocuBtnStyle, filterEditoTextStyle, filterDocuTextStyle, filterEditoPressed, filterDocuPressed, filterEditoLabel, filterDocuLabel,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
