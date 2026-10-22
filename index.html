@@ -233,7 +233,7 @@
   </style>
 </helmet>
 
-<div data-canvas-root style="{{appStyle}}" onPointerDown="{{onDown}}" onPointerMove="{{onMove}}" onPointerUp="{{onUp}}" onPointerLeave="{{onUp}}" onPointerCancel="{{onCancel}}">
+<div data-canvas-root style="{{appStyle}}" onPointerDown="{{onDown}}" onPointerMove="{{onMove}}" onPointerUp="{{onUp}}" onPointerLeave="{{onLeave}}" onPointerCancel="{{onCancel}}">
 
   <!-- ============= INFINITE WORLD ============= -->
   <div style="{{worldStyle}}">
@@ -2293,6 +2293,13 @@ class Component extends DCLogic {
     this.setState({ dragging: false });
   };
   onUp = (e) => this._endPointer(e, { allowMomentum: true });
+  // The mouse leaving the window mid-drag ends the drag. A finger can't
+  // "leave": on iOS Safari, the setPointerCapture in onMove itself fires a
+  // pointerleave — which, wired straight to onUp, ended every one-finger
+  // drag a few px in (the canvas then only coasted on momentum: the
+  // clumsy single-finger pan, while two fingers, never captured, were
+  // smooth). The finger's real lift still arrives as pointerup / cancel.
+  onLeave = (e) => { if (e.pointerType !== 'touch') this.onUp(e); };
   // Fires when the OS/browser abandons an in-progress pointer (e.g. a
   // system gesture, an alert, or the browser deciding it owns the touch)
   // rather than the user deliberately lifting. Must reset gesture
@@ -3926,7 +3933,7 @@ class Component extends DCLogic {
 
     return {
       appStyle, worldStyle, ink, hintStyle, hintText,
-      onDown: this.onDown, onMove: this.onMove, onUp: this.onUp, onCancel: this.onCancel,
+      onDown: this.onDown, onMove: this.onMove, onUp: this.onUp, onLeave: this.onLeave, onCancel: this.onCancel,
       signBoxStyle,
       signLabelRightStyle, signLabelLeftStyle, signLabelDownStyle, signLabelUpStyle,
       goEdito, goDocu, goPoesie, goManifeste, axisTicks,
