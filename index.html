@@ -3598,16 +3598,22 @@ class Component extends DCLogic {
     // whatever the two groups' widths; Contact is the outermost item on the
     // right. On a narrow screen the wordmark takes its own row on top and the
     // five links share the row beneath it.
-    // Phone and tablet (below 1024 px): one row — the links as icons on
-    // both sides, the PB logo (images/miscellaneous/pb-logo.webp, from
-    // PB_Noir) in place of the wordmark in the middle, all on one centre line.
-    const navNarrow = window.innerWidth < 1024;
-    const navStyle = (navNarrow
-      ? `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:${window.innerWidth < 760 ? '14px 16px 0' : '18px 28px 0'};pointer-events:none;`
-      : `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:22px 32px;pointer-events:none;`);
-    const navGap = navNarrow ? 12 : 28;
-    const navGroupLeftStyle = `display:flex;align-items:center;gap:${navGap}px;justify-self:start;` + introStyle(0, 0, 'bar');
-    const navGroupRightStyle = `display:flex;align-items:center;gap:${navGap}px;justify-self:end;` + introStyle(0, 0, 'bar');
+    // Phone and tablet only (a touch screen below 1024 px — a narrow window
+    // on a computer keeps the words): one row, the links as icons on both
+    // sides, the PB logo (images/miscellaneous/pb-logo.webp, from PB_Noir)
+    // in place of the wordmark in the middle, all on one centre line.
+    const touchScreen = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+    const navMobile = touchScreen && window.innerWidth < 1024;
+    const navNarrow = window.innerWidth < 760;
+    const navStyle = navMobile
+      ? `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:${navNarrow ? '14px 16px 0' : '18px 28px 0'};pointer-events:none;`
+      : navNarrow
+        ? `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto;grid-template-areas:"brand brand" "left right";row-gap:12px;align-items:center;justify-items:center;padding:16px 16px 0;pointer-events:none;`
+        : `position:fixed;top:0;left:0;right:0;z-index:60;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:22px 32px;pointer-events:none;`;
+    const navStacked = navNarrow && !navMobile; // the words, wordmark on its own row
+    const navGap = navNarrow || navMobile ? 12 : 28;
+    const navGroupLeftStyle = `display:flex;align-items:center;gap:${navGap}px;justify-self:start;${navStacked ? 'grid-area:left;' : ''}` + introStyle(0, 0, 'bar');
+    const navGroupRightStyle = `display:flex;align-items:center;gap:${navGap}px;justify-self:end;${navStacked ? 'grid-area:right;' : ''}` + introStyle(0, 0, 'bar');
     const brandDef = BRAND_FONTS.find((f) => f.id === this.state.brandFont) || BRAND_FONTS[0];
     // Opening sequence: placed big above the dial as soon as its position is
     // measured, but only fading in at the close-up's darkest moment
@@ -3620,9 +3626,9 @@ class Component extends DCLogic {
         ? (it ? `transform:translate(${it.dx}px,${it.dy}px) scale(${it.s});transform-origin:center;pointer-events:none;` +
             (this.state.introTitleOn ? `animation:pb-intro-in ${INTRO_TITLE_FADE_MS}ms ease both;` : 'opacity:0;') : 'opacity:0;')
         : `transform:none;transform-origin:center;transition:transform ${INTRO_TITLE_SHRINK_MS}ms ${INTRO_TITLE_SHRINK_EASE};pointer-events:none;`;
-    const brandStyle = `margin:0;font-family:${brandDef.family};font-size:${brandDef.size}px;font-weight:${brandDef.weight};letter-spacing:${brandDef.ls};color:${ink};pointer-events:auto;white-space:nowrap;${navNarrow ? 'line-height:0;' : ''}` + brandIntro;
-    const brandTextStyle = navNarrow ? 'display:none;' : '';
-    const brandLogoStyle = navNarrow ? 'display:block;height:34px;width:auto;' : 'display:none;';
+    const brandStyle = `margin:0;font-family:${brandDef.family};font-size:${brandDef.size}px;font-weight:${brandDef.weight};letter-spacing:${brandDef.ls};color:${ink};pointer-events:auto;white-space:nowrap;${navMobile ? 'line-height:0;' : navStacked ? 'grid-area:brand;' : ''}` + brandIntro;
+    const brandTextStyle = navMobile ? 'display:none;' : '';
+    const brandLogoStyle = navMobile ? 'display:block;height:34px;width:auto;' : 'display:none;';
     // Comparer panel — every candidate rendered at once, click one to apply it
     // to the real wordmark above. Standard site type for the chrome around it.
     const brandPickerOpen = this.state.brandPickerOpen;
@@ -3645,12 +3651,12 @@ class Component extends DCLogic {
     // spacing, black); Contact keeps its underline as the outermost action.
     const navFont = navNarrow ? 11 : 13, navLs = navNarrow ? '0.08em' : '0.14em';
     const navItemStyle = `font-family:'prestige-elite-std',monospace;font-size:${navFont}px;letter-spacing:${navLs};text-transform:uppercase;color:${ink};pointer-events:auto;white-space:nowrap;` +
-      (navNarrow ? 'display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;' : ''); // icons: a finger-sized target
+      (navMobile ? 'display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;' : ''); // icons: a finger-sized target
     // On a phone the four links are icons (a sheet, an envelope with its
     // letter, a bag, an @) — less text on a small screen; on a wider one, the
     // words. Each link keeps its name as aria-label. Once the address is
     // copied, Contact's @ gives way to the word "Copié" for a moment.
-    const navIcons = navNarrow;
+    const navIcons = navMobile;
     const navTextStyle = navIcons ? 'display:none;' : '';
     const navIconStyle = navIcons ? 'display:block;' : 'display:none;';
     const contactTextStyle = navIcons && !this.state.copied ? 'display:none;' : '';
@@ -3705,7 +3711,7 @@ class Component extends DCLogic {
     // away softly instead of running into the letters. The same along the
     // bottom, behind Édito / Docu and the round buttons (their top edge is
     // 65 px up).
-    const navFadeSolid = navNarrow ? 64 : 62, navFadeLen = 44;
+    const navFadeSolid = navMobile ? 64 : navStacked ? 78 : 62, navFadeLen = 44;
     const navFadeStyle = `position:fixed;top:0;left:0;right:0;height:${navFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
       `background:linear-gradient(to bottom, ${bg} 0, ${bg} ${navFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
     const bottomFadeSolid = 68;
