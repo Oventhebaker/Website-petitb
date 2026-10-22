@@ -1945,13 +1945,35 @@ class Component extends DCLogic {
     this._homing = false;
   };
 
+  // Copies the address and says "Copié" right away, on the tap itself (iOS
+  // can refuse or delay the clipboard, which used to leave the link silent).
+  // The old copy command first — it runs within the tap, which iOS accepts —
+  // then the clipboard API; if neither works, the mail app opens instead.
   copyEmail = (e) => {
     e.preventDefault();
-    navigator.clipboard.writeText('petitbouquetin.media@gmail.com').then(() => {
-      this.setState({ copied: true });
-      clearTimeout(this._copiedTimer);
-      this._copiedTimer = setTimeout(() => this.setState({ copied: false }), 1500);
-    }).catch((err) => console.warn('[copyEmail] clipboard write failed:', err));
+    const addr = 'petitbouquetin.media@gmail.com';
+    let copied = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = addr;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, addr.length);
+      copied = document.execCommand('copy');
+      ta.remove();
+    } catch (err) { /* fall through to the clipboard API */ }
+    if (!copied) {
+      if (!navigator.clipboard) { window.location.href = 'mailto:' + addr; return; }
+      navigator.clipboard.writeText(addr).catch((err) => {
+        console.warn('[copyEmail] clipboard write failed:', err);
+        window.location.href = 'mailto:' + addr;
+      });
+    }
+    this.setState({ copied: true });
+    clearTimeout(this._copiedTimer);
+    this._copiedTimer = setTimeout(() => this.setState({ copied: false }), 2000);
   };
 
   // Every currently-down pointer (touch, mouse, or pen), keyed by
