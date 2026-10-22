@@ -401,7 +401,7 @@
        down from the centre. Glides back to the home dial (and drops the Édito /
        Docu filter) — see goCenter / _returnHome. -->
   <button onClick="{{goCenter}}" style="{{homeBtnStyle}}" aria-label="Revenir au cadran">
-    <svg width="34" height="34" viewBox="0 0 24 24" style="display:block;"><path d="M12.00 2.60 L12.73 10.24 L15.82 8.18 L13.76 11.27 L21.40 12.00 L13.76 12.73 L15.82 15.82 L12.73 13.76 L12.00 21.40 L11.27 13.76 L8.18 15.82 L10.24 12.73 L2.60 12.00 L10.24 11.27 L8.18 8.18 L11.27 10.24 Z" fill="{{ink}}"></path><path d="M10.7 12 L13.3 12 L12 23.6 Z" fill="{{ink}}"></path><circle cx="12" cy="12" r="1.5" fill="{{ink}}" stroke="#FFFFFF" stroke-width="0.7"></circle></svg>
+    <svg width="34" height="34" viewBox="0 0 24 24" style="display:block;"><path d="M12.00 2.60 L12.73 10.24 L15.82 8.18 L13.76 11.27 L21.40 12.00 L13.76 12.73 L15.82 15.82 L12.73 13.76 L12.00 21.40 L11.27 13.76 L8.18 15.82 L10.24 12.73 L2.60 12.00 L10.24 11.27 L8.18 8.18 L11.27 10.24 Z" fill="{{ink}}"></path><path d="M10.7 12 L13.3 12 L12 23.6 Z" fill="{{ink}}"></path><circle cx="12" cy="12" r="1.5" fill="{{ink}}"></circle></svg>
   </button>
 
   <!-- ============= SEARCH ============= -->
@@ -3540,9 +3540,9 @@ class Component extends DCLogic {
     const contactStyle = navItemStyle + `font-weight:700;border-bottom:1px solid ${ink};padding-bottom:1px;`; // underlined buttons are bold
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
-    const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
+    const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
     // Back-to-the-dial button: the search button's twin, 12 px to its left.
-    const homeBtnStyle = `position:fixed;bottom:24px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
+    const homeBtnStyle = `position:fixed;bottom:24px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
     // Édito / Docu filter, bottom left where the compass sat (same corner,
     // same intro fade). Text buttons in the interface face; each button is a
     // 44 px tall touch target, the label inside it carries the styling. The
