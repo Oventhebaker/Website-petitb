@@ -1076,7 +1076,7 @@ class Component extends DCLogic {
   };
 
   componentDidMount() {
-    if (this.state.intro) this._startIntro();
+    if (this.state.intro) this._startIntroWhenVisible();
     else this._armHint();
     // Two-finger trackpad pan and Ctrl+wheel/pinch zoom both arrive as wheel
     // events. React's onWheel is attached passive, so preventDefault() there
@@ -1351,8 +1351,35 @@ class Component extends DCLogic {
   // length + INTRO_CAP_MARGIN_MS; the canvas is usable from the moment the
   // reveal starts. Each step leaves a performance mark
   // (pb-intro-*) for timing checks.
+  // A page that loads without being on screen — a background tab, a restored
+  // window, a phone shortcut that loads the page before showing it, a
+  // prerender — isn't allowed to play video: the film stayed paused and the
+  // safety cap ended the opening while nobody was looking. So the opening
+  // waits (white page, pieces hidden) until the page is actually visible.
+  _startIntroWhenVisible() {
+    const visible = () => document.visibilityState === 'visible' && !document.prerendering;
+    if (visible()) { this._startIntro(); return; }
+    performance.mark('pb-intro-wait-visible');
+    this._onIntroWaitVisible = () => {
+      if (!visible()) return;
+      document.removeEventListener('visibilitychange', this._onIntroWaitVisible);
+      document.removeEventListener('prerenderingchange', this._onIntroWaitVisible);
+      this._onIntroWaitVisible = null;
+      this._startIntro();
+    };
+    document.addEventListener('visibilitychange', this._onIntroWaitVisible);
+    document.addEventListener('prerenderingchange', this._onIntroWaitVisible);
+  }
+
   _startIntro() {
     try { sessionStorage.setItem(INTRO_SEEN_KEY, '1'); } catch (e) {}
+    // Hidden mid-opening (tab switched, phone locked) or restored from the
+    // back/forward cache: jump to the final state, so coming back shows the
+    // site rather than a film stopped half-way.
+    this._onIntroHidden = () => { if (document.visibilityState === 'hidden') { performance.mark('pb-intro-hidden'); this._introFinish(); } };
+    document.addEventListener('visibilitychange', this._onIntroHidden);
+    this._onIntroPageShow = (e) => { if (e.persisted) this._introFinish(); };
+    window.addEventListener('pageshow', this._onIntroPageShow);
     performance.mark('pb-intro-start');
     this._introReduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     const v = document.createElement('video');
@@ -1557,6 +1584,13 @@ class Component extends DCLogic {
 
   _introCleanup() {
     cancelAnimationFrame(this._introRaf);
+    if (this._onIntroWaitVisible) {
+      document.removeEventListener('visibilitychange', this._onIntroWaitVisible);
+      document.removeEventListener('prerenderingchange', this._onIntroWaitVisible);
+      this._onIntroWaitVisible = null;
+    }
+    if (this._onIntroHidden) { document.removeEventListener('visibilitychange', this._onIntroHidden); this._onIntroHidden = null; }
+    if (this._onIntroPageShow) { window.removeEventListener('pageshow', this._onIntroPageShow); this._onIntroPageShow = null; }
     clearTimeout(this._introLoadTimer); clearTimeout(this._introCapTimer);
     clearTimeout(this._introFallbackTimer); clearTimeout(this._introDoneTimer);
     if (this._introSkip) {
