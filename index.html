@@ -363,7 +363,7 @@
     <h1 style="{{brandStyle}}">Petit Bouquetin</h1>
     <div style="{{navGroupRightStyle}}">
       <a href="#" onClick="{{openBoutique}}" style="{{navItemStyle}}" aria-label="Boutique"><span style="{{navTextStyle}}">Boutique</span><svg width="22" height="22" viewBox="0 0 24 24" style="{{navIconStyle}}" aria-hidden="true"><path d="M5 8h14l-1.2 13H6.2z M9 8V6.5a3 3 0 0 1 6 0V8" fill="none" stroke="{{ink}}" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"></path></svg></a>
-      <a href="mailto:petitbouquetin.media@gmail.com" onClick="{{copyEmail}}" style="{{contactStyle}}" aria-label="{{contactLabel}}"><span style="{{navTextStyle}}">{{ contactLabel }}</span><svg width="22" height="22" viewBox="0 0 24 24" style="{{navIconStyle}}" aria-hidden="true"><path d="{{contactIconPath}}" fill="none" stroke="{{ink}}" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"></path></svg></a>
+      <a href="mailto:petitbouquetin.media@gmail.com" onClick="{{copyEmail}}" style="{{contactStyle}}" aria-label="{{contactLabel}}"><span style="{{contactTextStyle}}">{{ contactLabel }}</span><svg width="22" height="22" viewBox="0 0 24 24" style="{{contactIconStyle}}" aria-hidden="true"><path d="M15.5 12a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z M15.5 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.3 8.3 0 1 0-3.2 6.6" fill="none" stroke="{{ink}}" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"></path></svg></a>
     </div>
   </nav>
 
@@ -3621,12 +3621,13 @@ class Component extends DCLogic {
       (navNarrow ? 'display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;' : ''); // icons: a finger-sized target
     // On a phone the four links are icons (a sheet, an envelope with its
     // letter, a bag, an @) — less text on a small screen; on a wider one, the
-    // words. Each link keeps its name as aria-label. Contact's @ turns into a
-    // tick while "Copié" would show.
+    // words. Each link keeps its name as aria-label. Once the address is
+    // copied, Contact's @ gives way to the word "Copié" for a moment.
     const navIcons = navNarrow;
     const navTextStyle = navIcons ? 'display:none;' : '';
     const navIconStyle = navIcons ? 'display:block;' : 'display:none;';
-    const contactIconPath = this.state.copied ? 'M5 12.5l4.5 4.5L19 7.5' : 'M15.5 12a3.5 3.5 0 1 1-7 0a3.5 3.5 0 0 1 7 0z M15.5 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.3 8.3 0 1 0-3.2 6.6';
+    const contactTextStyle = navIcons && !this.state.copied ? 'display:none;' : '';
+    const contactIconStyle = navIcons && !this.state.copied ? 'display:block;' : 'display:none;';
     const contactStyle = navIcons
       ? navItemStyle + 'display:inline-flex;align-items:center;justify-content:center;min-width:40px;min-height:40px;'
       : navItemStyle + `font-weight:700;border-bottom:1px solid ${ink};padding-bottom:1px;`; // underlined buttons are bold
@@ -3993,7 +3994,7 @@ class Component extends DCLogic {
       signLabelRightStyle, signLabelLeftStyle, signLabelDownStyle, signLabelUpStyle,
       goEdito, goDocu, goPoesie, goManifeste, axisTicks,
       fillerItems, editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, textItems,
-      navStyle, navGroupLeftStyle, navGroupRightStyle, navItemStyle, openManifesto, openNewsletter, openBoutique, soonOpen, closeSoon, soonTitle, soonColStyle, soonTitleStyle, soonNoteStyle, brandStyle, brandPickerOpen, closeBrandPicker, brandPickerStyle, brandPickerHeadStyle, brandPickerCloseStyle, brandOptions, contactStyle, contactLabel, navTextStyle, navIconStyle, contactIconPath, copyEmail: this.copyEmail,
+      navStyle, navGroupLeftStyle, navGroupRightStyle, navItemStyle, openManifesto, openNewsletter, openBoutique, soonOpen, closeSoon, soonTitle, soonColStyle, soonTitleStyle, soonNoteStyle, brandStyle, brandPickerOpen, closeBrandPicker, brandPickerStyle, brandPickerHeadStyle, brandPickerCloseStyle, brandOptions, contactStyle, contactLabel, navTextStyle, navIconStyle, contactTextStyle, contactIconStyle, copyEmail: this.copyEmail,
       navFadeStyle, bottomFadeStyle, homeBtnStyle, searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
       filterGroupStyle, filterEdito, filterDocu, filterEditoBtnStyle, filterDocuBtnStyle, filterEditoTextStyle, filterDocuTextStyle, filterEditoPressed, filterDocuPressed, filterEditoLabel, filterDocuLabel,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
