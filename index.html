@@ -348,17 +348,13 @@
        See _armHint. Always in the DOM, faded in/out via hintStyle. -->
   <div style="{{hintStyle}}" aria-live="polite">{{ hintText }}</div>
 
-  <!-- ============= COMPASS (return to center) ============= -->
-  <button onClick="{{goCenter}}" style="{{compassBtnStyle}}">
-    <svg width="30" height="30" viewBox="0 0 40 40" style="display:block;">
-      <circle cx="20" cy="20" r="17" fill="none" stroke="{{ink}}" stroke-width="1"></circle>
-      <path d="M20 6 L23 19 L20 22 L17 19 Z" fill="{{ink}}"></path>
-      <path d="M20 34 L17 21 L20 18 L23 21 Z" fill="none" stroke="{{ink}}" stroke-width="1"></path>
-      <line x1="6" y1="20" x2="15" y2="20" stroke="{{ink}}" stroke-width="0.8"></line>
-      <line x1="25" y1="20" x2="34" y2="20" stroke="{{ink}}" stroke-width="0.8"></line>
-      <circle cx="20" cy="20" r="1.6" fill="{{ink}}"></circle>
-    </svg>
-  </button>
+  <!-- ============= ÉDITO / DOCU FILTER (bottom left) =============
+       Replaced the compass button (goCenter / _glideHome are kept: a click
+       on the active filter glides back to the centre). See toggleFilter. -->
+  <div style="{{filterGroupStyle}}" role="group" aria-label="Filtrer les projets">
+    <button onClick="{{filterEdito}}" style="{{filterEditoBtnStyle}}" aria-pressed="{{filterEditoPressed}}" aria-label="{{filterEditoLabel}}"><span style="{{filterEditoTextStyle}}">Édito</span></button>
+    <button onClick="{{filterDocu}}" style="{{filterDocuBtnStyle}}" aria-pressed="{{filterDocuPressed}}" aria-label="{{filterDocuLabel}}"><span style="{{filterDocuTextStyle}}">Docu</span></button>
+  </div>
 
   <!-- ============= SEARCH ============= -->
   <button onClick="{{openSearch}}" style="{{searchBtnStyle}}">
@@ -550,6 +546,12 @@ const SITE_TITLE = 'Petit Bouquetin, studio créatif à Paris — éditorial, do
 const SITE_DESC = 'Petit Bouquetin est un studio créatif fondé à Paris par Léonard Videt : éditoriaux de mode, films documentaires, direction artistique et photographie.';
 const SITE_SHARE_IMAGE = SITE_URL + '/images/og/petit-bouquetin-share.jpg';
 const CAT_LABEL = { edito: 'Éditorial', docu: 'Documentaire', poesie: 'Poésie', manifeste: 'Manifeste' };
+// Édito / Docu filter (bottom left, where the compass used to be): the
+// chosen category stays at full strength, every other card and every curio
+// / text block drops to FILTER_DIM and stops taking clicks, and the camera
+// glides to frame the chosen cards. See toggleFilter.
+const FILTER_DIM = 0.12;
+const FILTER_FADE_MS = 400;
 // ── Opening sequence ────────────────────────────────────────────────────
 // Once per browser session, on the home page only: the sundial video plays
 // on white, lands exactly on the canvas's own dial, cross-fades into it, then
@@ -1070,6 +1072,7 @@ class Component extends DCLogic {
     introTitleOn: false, // the big wordmark has appeared (close-up reached)
     introPlain: false,   // no film (poster fallback): the wordmark stays in place
     hint: false,      // navigation hint on screen (see _armHint)
+    filter: null,     // 'edito' | 'docu' | null — see toggleFilter
   };
 
   componentDidMount() {
@@ -1669,16 +1672,18 @@ class Component extends DCLogic {
   // transform transition means each frame renders at its
   // true scale (no GPU texture-stretch blur mid-move). Any real gesture
   // cancels it (see _cancelGlideHome in onDown / handleWheel).
-  _glideHome = () => {
+  _glideHome = () => this._glideTo(CX, CY, this.homeZoom());
+  // The same eased glide towards any world point (x, y) and zoom — used by
+  // the compass return-to-center (_glideHome) and the Édito / Docu filter.
+  _glideTo = (x, y, zT) => {
     this._stopMomentum();
     this._cancelGlideHome();
     const x0 = this.state.camX, y0 = this.state.camY, z0 = this.state.zoom;
-    // Shortest wrap-aware target: the CX/CY-equivalent (CX + kW) nearest
-    // the current camera, so a far-wrapped pan eases the short way home
+    // Shortest wrap-aware target: the (x, y)-equivalent (x + kW) nearest
+    // the current camera, so a far-wrapped pan eases the short way there
     // instead of unwinding every wrap.
-    const xT = CX + Math.round((x0 - CX) / WRAP_W) * WRAP_W;
-    const yT = CY + Math.round((y0 - CY) / WRAP_H) * WRAP_H;
-    const zT = this.homeZoom();
+    const xT = x + Math.round((x0 - x) / WRAP_W) * WRAP_W;
+    const yT = y + Math.round((y0 - y) / WRAP_H) * WRAP_H;
     if (x0 === xT && y0 === yT && Math.abs(z0 - zT) < 1e-3) return;
     const DUR = 960; // eased a touch slower than it first shipped — the compass felt hurried
     const t0 = performance.now();
@@ -1698,13 +1703,38 @@ class Component extends DCLogic {
       } else {
         this._glideRaf = null;
         this._homing = false;
-        // Land on CX/CY exactly (xT ≡ CX mod W, so no visible jump) to keep
-        // camX/camY from drifting unbounded across repeated compass uses.
-        this.setState({ camX: CX, camY: CY, zoom: zT, navigating: false });
+        // Land on (x, y) exactly (xT ≡ x mod W, so no visible jump) to keep
+        // camX/camY from drifting unbounded across repeated uses.
+        this.setState({ camX: x, camY: y, zoom: zT, navigating: false });
       }
     };
     this._glideRaf = requestAnimationFrame(step);
   };
+  // Zoom that fits a zone's bounding box (ALL()'s _navTargets) on screen,
+  // with a little breathing room, never below the zoom-out floor nor in
+  // past 1 — shared by the sector labels and the Édito / Docu filter.
+  _fitZoom(t) {
+    const FIT_MARGIN = 1.15;
+    const zx = window.innerWidth / (2 * t.halfW * FIT_MARGIN);
+    const zy = window.innerHeight / (2 * t.halfH * FIT_MARGIN);
+    return Math.max(this.minZoom(), Math.min(1, zx, zy));
+  }
+
+  // Édito / Docu filter: a click on a category frames its cards and dims
+  // everything else; a click on the active one turns the filter off and
+  // glides back to the centre, as the compass used to.
+  toggleFilter = (cat) => {
+    if (this.state.filter === cat) {
+      this.setState({ filter: null });
+      this._glideHome();
+      return;
+    }
+    this.ALL(); // makes sure _navTargets is computed
+    const t = this._navTargets[cat];
+    this.setState({ filter: cat });
+    this._glideTo(t.x, t.y, this._fitZoom(t));
+  };
+
   _cancelGlideHome = () => {
     if (this._glideRaf) { cancelAnimationFrame(this._glideRaf); this._glideRaf = null; }
     this._homing = false;
@@ -2998,6 +3028,13 @@ class Component extends DCLogic {
       const d = Math.min(1, Math.hypot(x - CX, y - CY) / 3000);
       return `animation:pb-intro-in ${INTRO_PIECE_MS}ms ease-out ${Math.round(INTRO_FADE_MS + d * INTRO_WAVE_MS)}ms both;`;
     };
+    // Édito / Docu filter: opacity factor for a piece (1 = full) and the
+    // fade between the two states. Cards of another category, curios and
+    // text blocks are dimmed; the dial, the cross labels and the axis marks
+    // stay, as the map's fixed frame.
+    const filter = this.state.filter;
+    const dimFor = (cat) => (filter && cat !== filter ? FILTER_DIM : 1);
+    const filterFade = `opacity ${FILTER_FADE_MS}ms ease`;
 
     const worldStyle = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;transform-origin:0 0;transform:translate(calc(50vw - ${dispX * zoom}px), calc(50vh - ${dispY * zoom}px)) scale(${zoom});transition:${transition};`;
 
@@ -3116,14 +3153,9 @@ class Component extends DCLogic {
     // little breathing room (FIT_MARGIN), instead of the old fixed zoom=1
     // that only ever showed part of a sector. Capped at 1 so a small zone
     // (a zone with only a few pieces) never zooms IN past the old default.
-    const FIT_MARGIN = 1.15;
-    const fitZoom = (t) => {
-      const zx = window.innerWidth / (2 * t.halfW * FIT_MARGIN);
-      const zy = window.innerHeight / (2 * t.halfH * FIT_MARGIN);
-      // Never below the zoom-out floor, so a sector click can't leave the
-      // camera further out than a gesture could.
-      return Math.max(this.minZoom(), Math.min(1, zx, zy));
-    };
+    // Never below the zoom-out floor, so a sector click can't leave the
+    // camera further out than a gesture could (see _fitZoom).
+    const fitZoom = (t) => this._fitZoom(t);
     const goEdito = (e) => { e.preventDefault(); this.navTo(nt.edito.x, nt.edito.y, fitZoom(nt.edito)); };
     const goDocu = (e) => { e.preventDefault(); this.navTo(nt.docu.x, nt.docu.y, fitZoom(nt.docu)); };
     const goPoesie = (e) => { e.preventDefault(); this.navTo(nt.poesie.x, nt.poesie.y, fitZoom(nt.poesie)); };
@@ -3159,7 +3191,7 @@ class Component extends DCLogic {
         slot: 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
         alt: p.title + ' — ' + CAT_LABEL[p.cat].toLowerCase() + ' de Petit Bouquetin, studio créatif à Paris',
         open: openDetail(p),
-        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition};${magTransform}` + wrapOpacity(wrap) + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2),
+        wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition === 'none' ? filterFade : transition + ', ' + filterFade};${magTransform}` + wrapOpacity(wrap, dimFor(p.cat)) + (dimFor(p.cat) < 1 ? 'pointer-events:none;' : '') + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2),
         shadowStyle,
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
         capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
@@ -3185,7 +3217,7 @@ class Component extends DCLogic {
         src: d.src,
         loading: d.sundial ? 'eager' : 'lazy',
         style: `position:absolute;left:${d.x + w.ox}px;top:${d.y + w.oy}px;width:${d.w}px;height:${d.h}px;` +
-          `object-fit:contain;pointer-events:none;` + wrapOpacity(w, d.sundial ? 1 : 0.9) + introStyle(d.x + w.ox + d.w / 2, d.y + w.oy + d.h / 2, d.sundial ? 'dial' : ''),
+          `object-fit:contain;pointer-events:none;transition:${filterFade};` + wrapOpacity(w, d.sundial ? 1 : 0.9 * dimFor(null)) + introStyle(d.x + w.ox + d.w / 2, d.y + w.oy + d.h / 2, d.sundial ? 'dial' : ''),
       };
     });
 
@@ -3205,10 +3237,10 @@ class Component extends DCLogic {
     const textItems = this._texts.map((t) => ({ t, w: wrapAt(t.x + t.w / 2, t.y + t.h / 2) })).map(({ t, w }) => ({
       text: t.text, sig: t.sig || '', link: t.link || '', after: t.after || '',
       href: t.link ? contactMailHref : '',
-      boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;` + wrapOpacity(w) + introStyle(t.x + w.ox + t.w / 2, t.y + w.oy + t.h / 2),
+      boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;transition:${filterFade};` + wrapOpacity(w, dimFor(null)) + introStyle(t.x + w.ox + t.w / 2, t.y + w.oy + t.h / 2),
       bodyStyle: textBodyStyle,
       sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
-      linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:auto;cursor:pointer;`,
+      linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:${filter ? 'none' : 'auto'};cursor:pointer;`,
     }));
 
     // The vinyl curio (→ Spotify playlist). Rendered as an <a> so a genuine
@@ -3224,8 +3256,8 @@ class Component extends DCLogic {
     const _vinylWrap = _vinyl ? wrapAt(_vinyl.x + _vinyl.w / 2, _vinyl.y + _vinyl.h / 2) : null;
     const vinylItem = _vinyl ? {
       href: _vinyl.href, src: _vinyl.src,
-      wrapStyle: wrapOpacity(_vinylWrap) + introStyle(_vinyl.x + _vinylWrap.ox + _vinyl.w / 2, _vinyl.y + _vinylWrap.oy + _vinyl.h / 2) + `position:absolute;left:${_vinyl.x + _vinylWrap.ox}px;top:${_vinyl.y + _vinylWrap.oy}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
-        `display:block;pointer-events:auto;cursor:inherit;text-decoration:none;`,
+      wrapStyle: `transition:${filterFade};` + wrapOpacity(_vinylWrap, dimFor(null)) + introStyle(_vinyl.x + _vinylWrap.ox + _vinyl.w / 2, _vinyl.y + _vinylWrap.oy + _vinyl.h / 2) + `position:absolute;left:${_vinyl.x + _vinylWrap.ox}px;top:${_vinyl.y + _vinylWrap.oy}px;width:${_vinyl.w}px;height:${_vinyl.h}px;` +
+        `display:block;pointer-events:${dimFor(null) < 1 ? 'none' : 'auto'};cursor:inherit;text-decoration:none;`,
       imgStyle: `width:100%;height:100%;object-fit:contain;pointer-events:none;opacity:0.9;`,
     } : null;
 
@@ -3280,15 +3312,37 @@ class Component extends DCLogic {
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
     const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:${bg};display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
-    const compassBtnStyle = `position:fixed;bottom:24px;left:24px;z-index:70;width:38px;height:38px;background:none;border:none;padding:0;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
+    // Édito / Docu filter, bottom left where the compass sat (same corner,
+    // same intro fade). Text buttons in the interface face; each button is a
+    // 44 px tall touch target, the label inside it carries the styling. The
+    // active one is bold and thinly underlined (like the 404 page's « Retour
+    // à l'accueil »); while a filter is on, the other one recedes.
+    const filterGroupStyle = `position:fixed;bottom:21px;left:14px;z-index:70;display:flex;align-items:center;gap:2px;` + introStyle(0, 0, 'bar');
+    const filterBtnStyle = `min-height:44px;min-width:44px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
+    const filterTextStyle = (cat) => {
+      const on = filter === cat;
+      return `font-family:'prestige-elite-std',monospace;font-size:${navFont}px;letter-spacing:${navLs};text-transform:uppercase;white-space:nowrap;` +
+        `color:${filter && !on ? inkFaint : ink};font-weight:${on ? 700 : 400};padding-bottom:3px;border-bottom:1px solid ${on ? ink : 'transparent'};` +
+        `transition:color ${FILTER_FADE_MS}ms ease, border-color ${FILTER_FADE_MS}ms ease;`;
+    };
+    const filterEdito = () => this.toggleFilter('edito');
+    const filterDocu = () => this.toggleFilter('docu');
+    const filterEditoBtnStyle = filterBtnStyle, filterDocuBtnStyle = filterBtnStyle;
+    const filterEditoTextStyle = filterTextStyle('edito'), filterDocuTextStyle = filterTextStyle('docu');
+    const filterEditoPressed = String(filter === 'edito'), filterDocuPressed = String(filter === 'docu');
+    const filterEditoLabel = filter === 'edito' ? 'Afficher tous les projets' : 'Afficher uniquement les projets éditoriaux';
+    const filterDocuLabel = filter === 'docu' ? 'Afficher tous les projets' : 'Afficher uniquement les projets documentaires';
     // Navigation hint: bottom centre, level with the corner buttons, in the
     // site's typewriter face. Touch screens get "pincez", mice "molette".
     const hintTouch = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
     // Too narrow for one line between the corner buttons: one phrase per line.
     const hintText = (hintTouch ? HINT_TEXT_TOUCH : HINT_TEXT_MOUSE).replace(' · ', window.innerWidth < 480 ? '\n' : ' · ');
-    const hintStyle = `position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
+    // Below 720 px it would run into the Édito / Docu buttons: it moves up
+    // above the bottom row instead.
+    const hintAbove = window.innerWidth < 720;
+    const hintStyle = `position:fixed;left:50%;bottom:${hintAbove ? 82 : 34}px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
       `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.5;letter-spacing:0.08em;color:${inkFaint};` +
-      `width:max-content;max-width:calc(100vw - 140px);text-align:center;white-space:pre-line;` +
+      `width:max-content;max-width:calc(100vw - ${hintAbove ? 48 : 140}px);text-align:center;white-space:pre-line;` +
       `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;`;
     const goCenter = () => this._glideHome();
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
@@ -3570,7 +3624,8 @@ class Component extends DCLogic {
       goEdito, goDocu, goPoesie, goManifeste, axisTicks,
       editoItems, docuItems, poesieItems, manifesteItems, decorItems, vinylItem, textItems,
       navStyle, navGroupLeftStyle, navGroupRightStyle, navItemStyle, openManifesto, openNewsletter, openBoutique, soonOpen, closeSoon, soonTitle, soonColStyle, soonTitleStyle, soonNoteStyle, brandStyle, brandPickerOpen, closeBrandPicker, brandPickerStyle, brandPickerHeadStyle, brandPickerCloseStyle, brandOptions, contactStyle, contactLabel, copyEmail: this.copyEmail,
-      searchBtnStyle, compassBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
+      searchBtnStyle, goCenter, openSearch, closeSearch, stop, onSearchChange,
+      filterGroupStyle, filterEdito, filterDocu, filterEditoBtnStyle, filterDocuBtnStyle, filterEditoTextStyle, filterDocuTextStyle, filterEditoPressed, filterDocuPressed, filterEditoLabel, filterDocuLabel,
       searchOpen: this.state.searchOpen, searchQuery: this.state.searchQuery, searchColumns,
       searchOverlayStyle, searchModalStyle, searchInputStyle, searchListStyle,
       previewSrc, previewImgStyle,
