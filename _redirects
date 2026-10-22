@@ -39,4 +39,10 @@
 /projets/m-002  /projets/m-newsletter  301
 # END legacy project slugs
 
+# /work belonged to a previous version of the site and is still indexed by
+# Google: send it (and anything under it) home with a permanent redirect so
+# it drops out of the index. Above the catch-all below (first match wins).
+/work  /  301
+/work/*  /  301
+
 /projets/*  /  200
