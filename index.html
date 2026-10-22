@@ -1173,11 +1173,42 @@ class Component extends DCLogic {
     // preventDefault does, and the raw-touchstart approach is the one
     // CONFIRMED WORKING via real iPhone testing this session. Not worth
     // the regression risk to unify further.
+    //
+    // ONE finger is claimed at touchstart too now. Claiming it only at
+    // touchmove (the first fix) came too late on a real iPhone: Safari had
+    // already taken the vertical drag for its address bar, and the pan felt
+    // clumsy — whereas two fingers, claimed at touchstart, were smooth.
+    // Apple's own canvas guidance: preventDefault() in touchstart is what
+    // stops the default panning. The canvas itself runs on pointer events,
+    // which still fire, so drag / pinch are untouched. The cost: a prevented
+    // touchstart means no click on tap — so _onTouchEnd recreates it: a
+    // finger that went down and up without really moving clicks the element
+    // it touched (a card, a button, a link), exactly as a native tap would.
     this._onTouchStart = (e) => {
       if (this.state.detail || this.state.searchOpen || this.state.soonPage) return;
-      if (e.touches.length === 2) e.preventDefault();
+      if (e.touches.length === 1) {
+        const t = e.touches[0];
+        this._tap = { x: t.clientX, y: t.clientY, at: performance.now(), target: e.target };
+      } else {
+        this._tap = null; // a second finger: it's a pinch, not a tap
+      }
+      e.preventDefault();
     };
     this._canvasEl.addEventListener('touchstart', this._onTouchStart, { passive: false });
+    // The tap a prevented touchstart no longer produces (see above).
+    const TAP_SLOP = 10, TAP_MS = 600;
+    this._onTouchEnd = (e) => {
+      const tap = this._tap;
+      this._tap = null;
+      if (!tap || e.touches.length) return;
+      const t = e.changedTouches[0];
+      if (!t || Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > TAP_SLOP || performance.now() - tap.at > TAP_MS) return;
+      const el = tap.target && tap.target.closest && tap.target.closest('a, button, input, select, textarea, label, [role="button"]');
+      if (!el) return;
+      e.preventDefault();
+      if (el.matches('input, select, textarea')) el.focus(); else el.click();
+    };
+    this._canvasEl.addEventListener('touchend', this._onTouchEnd, { passive: false });
     // touchmove is claimed for ONE finger too, not just two: a single-finger
     // vertical drag on the canvas made iOS Safari collapse/expand its address
     // bar instead of panning — iOS doesn't honour touch-action:none (see
@@ -1688,6 +1719,7 @@ class Component extends DCLogic {
     if (this._canvasEl) {
       this._canvasEl.removeEventListener('touchstart', this._onTouchStart);
       this._canvasEl.removeEventListener('touchmove', this._onTouchMove);
+      this._canvasEl.removeEventListener('touchend', this._onTouchEnd);
     }
     window.removeEventListener('resize', this._onResize);
     window.removeEventListener('contextmenu', this._onContextMenu);
