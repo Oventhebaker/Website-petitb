@@ -396,11 +396,11 @@
   <div style="{{hintStyle}}" aria-live="polite">{{ hintText }}</div>
 
   <!-- ============= ÉDITO / DOCU FILTER (bottom left) =============
-       Replaced the compass button (goCenter / _glideHome are kept: a click
-       on the active filter glides back to the centre). See toggleFilter. -->
+       Docu on the left, Édito on the right — the same sides as on the dial
+       (Docu to the west, Édito to the east). See toggleFilter. -->
   <div style="{{filterGroupStyle}}" role="group" aria-label="Filtrer les projets">
-    <button onClick="{{filterEdito}}" style="{{filterEditoBtnStyle}}" aria-pressed="{{filterEditoPressed}}" aria-label="{{filterEditoLabel}}"><span style="{{filterEditoTextStyle}}">Édito</span></button>
     <button onClick="{{filterDocu}}" style="{{filterDocuBtnStyle}}" aria-pressed="{{filterDocuPressed}}" aria-label="{{filterDocuLabel}}"><span style="{{filterDocuTextStyle}}">Docu</span></button>
+    <button onClick="{{filterEdito}}" style="{{filterEditoBtnStyle}}" aria-pressed="{{filterEditoPressed}}" aria-label="{{filterEditoLabel}}"><span style="{{filterEditoTextStyle}}">Édito</span></button>
   </div>
 
   <!-- ============= BACK TO THE DIAL (left of the search) =============
