@@ -3517,6 +3517,12 @@ class Component extends DCLogic {
     }
     const magMax = this._magMax;
     const tileScale = (p, wrap) => {
+      // No magnify in WebKit (Safari, and every browser on iPhone): growing
+      // the cards with their blurred shadow on every frame of a pan made iOS
+      // Safari kill the page ("Un problème récurrent est survenu" — found by
+      // testing on an iPhone 15 Pro Max, October 2026: no crash with the
+      // magnify off, a crash within seconds with it on).
+      if (IS_WEBKIT) return { scale: 1, smooth: 0 };
       const worldDx = (p.x + wrap.ox + p.w / 2) - dispX, worldDy = (p.y + wrap.oy + p.h / 2) - dispY;
       const screenDist = Math.hypot(worldDx, worldDy) * zoom;
       const t = Math.max(0, Math.min(1, 1 - screenDist / MAG_RADIUS));
