@@ -3517,12 +3517,6 @@ class Component extends DCLogic {
     }
     const magMax = this._magMax;
     const tileScale = (p, wrap) => {
-      // No magnify in WebKit (Safari, and every browser on iPhone): growing
-      // the cards with their blurred shadow on every frame of a pan made iOS
-      // Safari kill the page ("Un problème récurrent est survenu" — found by
-      // testing on an iPhone 15 Pro Max, October 2026: no crash with the
-      // magnify off, a crash within seconds with it on).
-      if (IS_WEBKIT) return { scale: 1, smooth: 0 };
       const worldDx = (p.x + wrap.ox + p.w / 2) - dispX, worldDy = (p.y + wrap.oy + p.h / 2) - dispY;
       const screenDist = Math.hypot(worldDx, worldDy) * zoom;
       const t = Math.max(0, Math.min(1, 1 - screenDist / MAG_RADIUS));
@@ -3574,7 +3568,12 @@ class Component extends DCLogic {
       // every card's shadow permanently — as it used to be, via the class —
       // it was ~22 idle backing-store reservations for no benefit, the
       // over-application will-change is documented to punish.
-      const shadowStyle = `top:0;left:0;width:100%;height:${p.h}px;transition:${transition};opacity:${smooth};` +
+      // No shadow in WebKit (Safari, and every browser on iPhone): redrawing
+      // the blurred shadow under growing cards on every frame of a pan made
+      // iOS Safari kill the page ("Un problème récurrent est survenu").
+      // Found by testing on an iPhone 15 Pro Max, October 2026: crash with the
+      // shadow, none with the magnify kept and the shadow removed.
+      const shadowStyle = (IS_WEBKIT ? 'display:none;' : '') + `top:0;left:0;width:100%;height:${p.h}px;transition:${transition};opacity:${smooth};` +
         (smooth > 0.02 ? 'will-change:opacity;' : '');
       return {
         code: p.code, title: p.title, src: p.src,
