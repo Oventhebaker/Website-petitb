@@ -822,6 +822,18 @@ const PINCH_ACTIVATE_RATIO = 0.05;   // used when PINCH_ACTIVATE_MODE === 'ratio
 // narrow screens, where that fit would be tinier than anyone could read. See
 // the component's minZoom().
 const NORMAL_MIN_ZOOM = 0.15;
+// The zoom-out floor on a phone or tablet (see minZoom).
+const TOUCH_MIN_ZOOM = 0.24;
+const IS_TOUCH_SCREEN = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+// Below this zoom the canvas's texts and the cards' captions are a few px
+// tall, unreadable: they fade out, which also spares Safari redrawing them
+// while the view moves. LOD_ZOOM_OUT / _IN: a little apart, so hovering
+// right at the threshold doesn't make them flicker.
+const LOD_ZOOM_OUT = 0.38, LOD_ZOOM_IN = 0.42;
+// NB: the world must never get its own compositing layer (will-change:
+// transform / translate3d). It is 6000×6000 px: iOS then holds a bitmap of
+// its whole surface — hundreds of MB at the home zoom on a 3× screen — and
+// kills the page ("Un problème récurrent est survenu", October 2026).
 const CONTENT_HALF_W = 5 * 480 + 130 + 40;
 
 // ── WebKit rendering path ────────────────────────────────────────────────
@@ -1786,11 +1798,11 @@ class Component extends DCLogic {
     let alive = false;
 
     if (this._panVel) {
-      // Rate + stop-threshold are tuned together: a strong flick (~1.9
-      // world-units/ms) settles in ~500ms, a gentle one sooner — using a
-      // tiny absolute stop-threshold instead would make every glide take
-      // several seconds to decay away regardless of how slow it started.
-      const FRICTION = 0.01; // per-ms decay
+      // iOS's own scroll deceleration: the speed keeps 99.8 % of itself
+      // every millisecond (UIScrollView's "normal" rate), so a flick glides
+      // on for about half a second like a native list. It used to lose 1 %
+      // per ms — stopped in a tenth of a second, too short to feel at all.
+      const FRICTION = 0.002; // per-ms decay
       this.setState(s => ({
         camX: s.camX - this._panVel.x * dt,
         camY: s.camY - this._panVel.y * dt,
@@ -1799,7 +1811,8 @@ class Component extends DCLogic {
       const decay = Math.exp(-FRICTION * dt);
       this._panVel.x *= decay;
       this._panVel.y *= decay;
-      if (Math.hypot(this._panVel.x, this._panVel.y) > 0.01) alive = true;
+      // Stops once it's slower than 0.02 px/ms on screen, whatever the zoom.
+      if (Math.hypot(this._panVel.x, this._panVel.y) * this.state.zoom > 0.02) alive = true;
       else this._panVel = null;
     }
 
@@ -2513,7 +2526,11 @@ class Component extends DCLogic {
   }
 
   minZoom() {
-    return Math.max(NORMAL_MIN_ZOOM, window.innerWidth / (2 * CONTENT_HALF_W));
+    // A phone or tablet stops sooner (TOUCH_MIN_ZOOM): further out, the
+    // cards are unreadable specks, and Safari had dozens of them to redraw
+    // on every frame of a pan — that's where it stuttered.
+    const floor = IS_TOUCH_SCREEN && window.innerWidth < 1024 ? TOUCH_MIN_ZOOM : NORMAL_MIN_ZOOM;
+    return Math.max(floor, window.innerWidth / (2 * CONTENT_HALF_W));
   }
 
   // Zooms while keeping the world point under (clientX, clientY) fixed on
@@ -3280,6 +3297,9 @@ class Component extends DCLogic {
     const tileBg = '#EFECE4';
 
     const zoom = this.state.zoom;
+    // Far out: texts and captions fade out (see LOD_ZOOM_OUT).
+    if (this._lod ? zoom > LOD_ZOOM_IN : zoom < LOD_ZOOM_OUT) this._lod = !this._lod;
+    const lodStyle = `opacity:${this._lod ? 0 : 1};transition:opacity 300ms ease;`;
     const dispX = ((this.state.camX % WRAP_W) + WRAP_W) % WRAP_W;
     const dispY = ((this.state.camY % WRAP_H) + WRAP_H) % WRAP_H;
     const transition = this.state.navigating ? 'transform 0.9s cubic-bezier(0.22,1,0.36,1)' : 'none';
@@ -3481,23 +3501,27 @@ class Component extends DCLogic {
     // changes nothing there — it only clamps in as you zoom out.
     const MAG_RADIUS_WORLD_CAP = 900;
     const MAG_RADIUS = Math.min(MAG_RADIUS_SCREEN, MAG_RADIUS_WORLD_CAP * zoom);
+    // Every tile grows by the same amount (magMax): each one's own ceiling
+    // (its size against the clear gap around it) differed — 1.6 for some
+    // cards on the home map, 1.22 for the tighter ones and every copy — so
+    // some popped up much more than others. The shared value is the lowest
+    // of those ceilings, so no tile can reach a neighbour. (MAG_SAFETY
+    // keeps a margin: two neighbours may both grow toward each other.)
+    const tileCeiling = (p) => Math.min(
+      MAG_MAX_SCALE,
+      1 + (p.safeGrow * MAG_SAFETY) / p.w,
+      1 + (p.safeGrow * MAG_SAFETY) / (p.h + 90), // +caption strip, see ALL()'s NEIGHBOR_CAP_H
+    );
+    if (this._magMax === undefined) {
+      this._magMax = Math.min(...[...all.filter((p) => !p.offCanvas), ...(this._fillers || [])].map(tileCeiling));
+    }
+    const magMax = this._magMax;
     const tileScale = (p, wrap) => {
       const worldDx = (p.x + wrap.ox + p.w / 2) - dispX, worldDy = (p.y + wrap.oy + p.h / 2) - dispY;
       const screenDist = Math.hypot(worldDx, worldDy) * zoom;
       const t = Math.max(0, Math.min(1, 1 - screenDist / MAG_RADIUS));
       const smooth = t * t * (3 - 2 * t); // smoothstep: progressive in, progressive out
-      // safeGrow/2 per side (not safeGrow, as the single-hover version
-      // used) — with EVERY nearby tile potentially growing at once now
-      // rather than just one hovered tile, two neighbors could both grow
-      // toward each other simultaneously; halving keeps their COMBINED
-      // encroachment within the same safe fraction of the gap between
-      // them that a single grower alone used to get.
-      const tileMax = Math.min(
-        MAG_MAX_SCALE,
-        1 + (p.safeGrow * MAG_SAFETY) / p.w,
-        1 + (p.safeGrow * MAG_SAFETY) / (p.h + 90), // +caption strip, see ALL()'s NEIGHBOR_CAP_H
-      );
-      const scale = 1 + (tileMax - 1) * smooth;
+      const scale = 1 + (magMax - 1) * smooth;
       return { scale, smooth };
     };
 
@@ -3545,7 +3569,7 @@ class Component extends DCLogic {
       // it was ~22 idle backing-store reservations for no benefit, the
       // over-application will-change is documented to punish.
       const shadowStyle = `top:0;left:0;width:100%;height:${p.h}px;transition:${transition};opacity:${smooth};` +
-        (smooth > 0.02 ? 'will-change:opacity;' : '');
+        '';
       return {
         code: p.code, title: p.title, src: p.src,
         slot: p.filler ? 'pb-f-' + p.fid : 'pb-w-' + p.pcode, ph: p.code + ' — ' + p.title,
@@ -3554,7 +3578,7 @@ class Component extends DCLogic {
         wrapStyle: `position:absolute;left:${p.x + wrap.ox}px;top:${p.y + wrap.oy}px;width:${p.w}px;display:block;text-decoration:none;transform-origin:center center;transition:${transition === 'none' ? filterFade : transition + ', ' + filterFade};${magTransform}` + wrapOpacity(wrap, dimFor(p.cat)) + (dimFor(p.cat) < 1 ? 'pointer-events:none;' : '') + introStyle(p.x + wrap.ox + p.w / 2, p.y + wrap.oy + p.h / 2) + (fillerHidden ? 'display:none;' : ''),
         shadowStyle,
         imgBoxStyle: `position:relative;width:100%;height:${p.h}px;background:${tileBg};transition:${transition};`,
-        capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;`,
+        capStyle: `display:flex;align-items:baseline;gap:7px;margin-top:9px;` + lodStyle,
         codeStyle: `font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:0.06em;color:${ink};white-space:nowrap;flex-shrink:0;`,
         titleStyle: `font-family:'prestige-elite-std',monospace;font-size:14px;font-weight:700;color:${inkFaint};`,
       };
@@ -3600,8 +3624,8 @@ class Component extends DCLogic {
       text: t.text, sig: t.sig || '', link: t.link || '', after: t.after || '',
       href: t.link ? contactMailHref : '',
       boxStyle: `position:absolute;left:${t.x + w.ox}px;top:${t.y + w.oy}px;width:${t.w}px;pointer-events:none;user-select:none;-webkit-user-select:none;transition:${filterFade};` + wrapOpacity(w, dimFor(null)) + introStyle(t.x + w.ox + t.w / 2, t.y + w.oy + t.h / 2),
-      bodyStyle: textBodyStyle,
-      sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;`,
+      bodyStyle: textBodyStyle + lodStyle,
+      sigStyle: `font-family:'prestige-elite-std',monospace;font-size:12px;letter-spacing:0.04em;line-height:1.4;color:${inkFaint};margin-top:8px;` + lodStyle,
       linkStyle: `color:${ink};text-decoration:underline;text-underline-offset:2px;pointer-events:${filter ? 'none' : 'auto'};cursor:pointer;`,
     }));
 
@@ -3696,15 +3720,18 @@ class Component extends DCLogic {
       : navItemStyle + `font-weight:700;border-bottom:1px solid ${ink};padding-bottom:1px;`; // underlined buttons are bold
     const contactLabel = this.state.copied ? 'Copié' : 'Contact';
 
-    const searchBtnStyle = `position:fixed;bottom:24px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
+    // Phone and tablet: the bottom row sits BOTTOM_DROP px lower, close to
+    // Safari's bar; the hint and the bottom fade follow it down.
+    const BOTTOM_DROP = navMobile ? 16 : 0;
+    const searchBtnStyle = `position:fixed;bottom:${24 - BOTTOM_DROP}px;right:24px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;` + introStyle(0, 0, 'bar');
     // Back-to-the-dial button: the search button's twin, 12 px to its left.
-    const homeBtnStyle = `position:fixed;bottom:24px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
+    const homeBtnStyle = `position:fixed;bottom:${24 - BOTTOM_DROP}px;right:74px;z-index:70;width:38px;height:38px;border-radius:50%;border:1px solid ${inkFaint};background:transparent;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;` + introStyle(0, 0, 'bar');
     // Édito / Docu filter, bottom left where the compass sat (same corner,
     // same intro fade). Text buttons in the interface face; each button is a
     // 44 px tall touch target, the label inside it carries the styling. The
     // active one is bold and thinly underlined (like the 404 page's « Retour
     // à l'accueil »); while a filter is on, the other one recedes.
-    const filterGroupStyle = `position:fixed;bottom:21px;left:14px;z-index:70;display:flex;align-items:center;gap:2px;` + introStyle(0, 0, 'bar');
+    const filterGroupStyle = `position:fixed;bottom:${21 - BOTTOM_DROP}px;left:14px;z-index:70;display:flex;align-items:center;gap:2px;` + introStyle(0, 0, 'bar');
     const filterBtnStyle = `min-height:44px;min-width:44px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;background:none;border:none;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation;`;
     const filterTextStyle = (cat) => {
       const on = filter === cat;
@@ -3727,7 +3754,7 @@ class Component extends DCLogic {
     // Below 720 px it would run into the Édito / Docu buttons: it moves up
     // above the bottom row instead.
     const hintAbove = window.innerWidth < 720;
-    const hintStyle = `position:fixed;left:50%;bottom:${hintAbove ? 82 : 34}px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
+    const hintStyle = `position:fixed;left:50%;bottom:${(hintAbove ? 82 : 34) - BOTTOM_DROP}px;transform:translateX(-50%);z-index:65;pointer-events:none;` +
       `font-family:'prestige-elite-std',monospace;font-size:12px;line-height:1.5;letter-spacing:0.08em;color:${inkFaint};` +
       `width:max-content;max-width:calc(100vw - ${hintAbove ? 48 : 140}px);text-align:center;white-space:pre-line;` +
       `opacity:${this.state.hint && !overlayOpen ? 1 : 0};transition:opacity ${this.state.hint ? 700 : 300}ms ease;` +
@@ -3744,7 +3771,7 @@ class Component extends DCLogic {
     const navFadeSolid = navMobile ? 64 : navStacked ? 78 : 62, navFadeLen = 44;
     const navFadeStyle = `position:fixed;top:0;left:0;right:0;height:${navFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
       `background:linear-gradient(to bottom, ${bg} 0, ${bg} ${navFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
-    const bottomFadeSolid = 68;
+    const bottomFadeSolid = 68 - BOTTOM_DROP;
     const bottomFadeStyle = `position:fixed;bottom:0;left:0;right:0;height:${bottomFadeSolid + navFadeLen}px;z-index:59;pointer-events:none;` +
       `background:linear-gradient(to top, ${bg} 0, ${bg} ${bottomFadeSolid}px, rgba(255,255,255,0) 100%);` + introStyle(0, 0, 'bar');
     const openSearch = () => this.setState({ searchOpen: true, searchQuery: '' });
@@ -3823,10 +3850,15 @@ class Component extends DCLogic {
     const previewTop = Math.min(this.state.hoverY + 18, window.innerHeight - 40);
     const previewImgStyle = `position:fixed;left:${previewLeft}px;top:${previewTop}px;width:${PREVIEW_W}px;height:auto;max-height:260px;object-fit:cover;box-shadow:0 10px 30px rgba(0,0,0,0.5);pointer-events:none;z-index:95;background:${tileBg};`;
 
-    const searchOverlayStyle = `position:fixed;inset:0;z-index:80;background:rgba(255,255,255,0.9);display:flex;align-items:flex-start;justify-content:center;padding-top:14vh;`;
-    const searchModalStyle = `width:min(92vw,860px);max-height:80vh;overflow-y:auto;`;
+    // A narrow screen can't fit the four columns side by side (the last one
+    // ran off the right edge): two columns there, and the list scrolls
+    // within whatever height is left under the field.
+    const searchNarrow = window.innerWidth < 760;
+    const searchTop = searchNarrow ? '10vh' : '14vh';
+    const searchOverlayStyle = `position:fixed;inset:0;z-index:80;background:rgba(255,255,255,${searchNarrow ? 0.97 : 0.9});display:flex;align-items:flex-start;justify-content:center;padding-top:${searchTop};`;
+    const searchModalStyle = `width:min(92vw,860px);max-height:calc(100% - ${searchTop} - 16px);overflow-y:auto;-webkit-overflow-scrolling:touch;`;
     const searchInputStyle = `width:100%;font-family:'prestige-elite-std',monospace;font-size:20px;color:${ink};background:transparent;border:none;border-bottom:1px solid ${ink};padding:6px 2px 12px;outline:none;`;
-    const searchListStyle = `display:grid;grid-template-columns:repeat(4,1fr);gap:0 28px;margin-top:24px;align-items:start;`;
+    const searchListStyle = `display:grid;grid-template-columns:repeat(${searchNarrow ? 2 : 4},minmax(0,1fr));gap:${searchNarrow ? '28px 18px' : '0 28px'};margin-top:24px;align-items:start;`;
 
     // Project gallery overlay. dItem's own `gallery` (every image in its
     // folder) drives the left thumbnail grid; hovering a thumbnail swaps

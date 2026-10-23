@@ -3517,6 +3517,7 @@ class Component extends DCLogic {
     }
     const magMax = this._magMax;
     const tileScale = (p, wrap) => {
+      return { scale: 1, smooth: 0 };
       const worldDx = (p.x + wrap.ox + p.w / 2) - dispX, worldDy = (p.y + wrap.oy + p.h / 2) - dispY;
       const screenDist = Math.hypot(worldDx, worldDy) * zoom;
       const t = Math.max(0, Math.min(1, 1 - screenDist / MAG_RADIUS));

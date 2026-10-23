@@ -1869,7 +1869,7 @@ class Component extends DCLogic {
     const dx = fold(this.state.camX - CX, WRAP_W, window.innerWidth / (2 * z));
     const dy = fold(this.state.camY - CY, WRAP_H, window.innerHeight / (2 * z));
     this.setState({ camX: CX + dx, camY: CY + dy });
-    this._glideTo(CX, CY, this.homeZoom(), { exact: true, arc: true });
+    this._glideTo(CX, CY, this.homeZoom(), { exact: true, arc: false });
   };
   // The same eased glide towards any world point (x, y) and zoom — used by
   // the compass return-to-center (_glideHome) and the Édito / Docu filter.
@@ -3299,7 +3299,7 @@ class Component extends DCLogic {
     const zoom = this.state.zoom;
     // Far out: texts and captions fade out (see LOD_ZOOM_OUT).
     if (this._lod ? zoom > LOD_ZOOM_IN : zoom < LOD_ZOOM_OUT) this._lod = !this._lod;
-    const lodStyle = '';
+    const lodStyle = `opacity:${this._lod ? 0 : 1};transition:opacity 300ms ease;`;
     const dispX = ((this.state.camX % WRAP_W) + WRAP_W) % WRAP_W;
     const dispY = ((this.state.camY % WRAP_H) + WRAP_H) % WRAP_H;
     const transition = this.state.navigating ? 'transform 0.9s cubic-bezier(0.22,1,0.36,1)' : 'none';
